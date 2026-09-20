@@ -1,0 +1,6 @@
+{
+  "name": "CutterLog",
+  "description": "کاترلاگ - ابزار مدیریت پروژه‌ها، استودیوها، زمان، حسابرسی و امور مالی تدوین و ادیت ویدئو",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

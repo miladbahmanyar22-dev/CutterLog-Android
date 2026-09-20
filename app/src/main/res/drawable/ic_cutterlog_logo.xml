@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="500"
+    android:viewportHeight="500">
+
+    <!-- بخش بالایی با انحنای ملایم تاخورده -->
+    <path
+        android:fillColor="#7C6EFC"
+        android:pathData="M 203,133
+                          L 303,133
+                          C 334,164 353,186 364,196
+                          C 334,220 293,218 252,188
+                          L 190,250
+                          L 136,200
+                          Z" />
+
+    <!-- بخش میانی و پایینی با شکاف باریک اوریگامی -->
+    <path
+        android:fillColor="#6D5DFB"
+        android:pathData="M 135,204
+                          L 193,255
+                          L 299,365
+                          L 200,365
+                          L 135,301
+                          Z" />
+
+    <!-- لبه برگشتی انتهای حرف C در سمت راست پایین -->
+    <path
+        android:fillColor="#8B7DFF"
+        android:pathData="M 304,363
+                          L 364,300
+                          L 314,248
+                          L 249,311
+                          Z" />
+</vector>
