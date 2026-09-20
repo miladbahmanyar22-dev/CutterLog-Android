@@ -2,6 +2,32 @@
 > **سیستم مدیریت هوشمند پروژه‌ها، تایم‌شیت کارکرد، حسابداری و سوابق تدوین ویدئو**  
 > *طراحی‌شده اختصاصی برای ادیتورها، تدوین‌گران سینما و تلویزیون، تیزرسازان و استودیوهای تولید فیلم*
 
+---
+
+<div align="center">
+
+# ⚡ ساخته‌شده ۱۰۰٪ با هوش مصنوعی ⚡
+### 🤖 **100% BUILT WITH ARTIFICIAL INTELLIGENCE** 🤖
+
+```
+  ███████╗██╗   ██╗██╗     ██╗     ██╗   ██╗    ██████╗ ███████╗██╗   ██╗███████╗██╗      ██████╗ ██████╗ 
+  ██╔════╝██║   ██║██║     ██║     ╚██╗ ██╔╝    ██╔══██╗██╔════╝██║   ██║██╔════╝██║     ██╔═══██╗██╔══██╗
+  █████╗  ██║   ██║██║     ██║      ╚████╔╝     ██║  ██║█████╗  ██║   ██║█████╗  ██║     ██║   ██║██████╔╝
+  ██╔══╝  ██║   ██║██║     ██║       ╚██╔╝      ██║  ██║██╔══╝  ╚██╗ ██╔╝██╔══╝  ██║     ██║   ██║██╔═══╝ 
+  ██║     ╚██████╔╝███████╗███████╗   ██║       ██████╔╝███████╗ ╚████╔╝ ███████╗███████╗╚██████╔╝██║     
+  ╚═╝      ╚═════╝ ╚══════╝╚══════╝   ╚═╝       ╚═════╝ ╚══════╝  ╚═══╝  ╚══════╝╚══════╝ ╚═════╝ ╚═╝     
+                                 ─── BY AI ASSISTANT ───
+```
+
+### 🧠 تمام خطوط کد، معماری، دیتابیس، طراحی رابط کاربری (UI/UX) و تایپوگرافی این نرم‌افزار، به صورت کاملاً خودکار، هوشمند و یکپارچه توسط **هوش مصنوعی (AI)** توسعه یافته است.
+
+> 💡 **این پروژه نمادی واقعی و قدرتمند از تلفیق مهندسی نرم‌افزار، هنر تدوین و انقلاب هوش مصنوعی در ساخت اپلیکیشن‌های آماده تولید (Production-Ready) است.**
+
+---
+
+</div>
+
+[![Built with AI](https://img.shields.io/badge/Developed%20By-100%25%20AI%20Engine-9333EA?style=for-the-badge&logo=openai&logoColor=white)](https://ai.google.dev/)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://android.com)
 [![Language](https://img.shields.io/badge/Language-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![UI Toolkit](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
