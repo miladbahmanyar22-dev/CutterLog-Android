@@ -234,8 +234,22 @@ fun CutterPilotTab(viewModel: MainViewModel) {
     val weekTotalSecs = remember(last7DaysRecords) {
         last7DaysRecords.sumOf { it.totalSeconds }
     }
-    val avgDailySecs = remember(weekTotalSecs) {
-        weekTotalSecs / 7
+    val daysPassedThisWeek = remember {
+        val dayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+        val daysSinceSaturday = when (dayOfWeek) {
+            Calendar.SATURDAY -> 0
+            Calendar.SUNDAY -> 1
+            Calendar.MONDAY -> 2
+            Calendar.TUESDAY -> 3
+            Calendar.WEDNESDAY -> 4
+            Calendar.THURSDAY -> 5
+            Calendar.FRIDAY -> 6
+            else -> 0
+        }
+        (daysSinceSaturday + 1).coerceIn(1, 7)
+    }
+    val avgDailySecs = remember(weekTotalSecs, daysPassedThisWeek) {
+        if (daysPassedThisWeek > 0) weekTotalSecs / daysPassedThisWeek else 0L
     }
 
     // Efficiency Coach Metrics
@@ -497,7 +511,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -512,7 +526,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "CutterPilot AI",
+                                contentDescription = "دستیار هوشمند تدوین",
                                 tint = PrimaryPurple,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -534,7 +548,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                                     border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.3f))
                                 ) {
                                     Text(
-                                        text = "CutterPilot",
+                                        text = "دستیار تدوین",
                                         color = PrimaryPurple,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
@@ -550,28 +564,106 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                             )
                         }
                     }
+                }
 
-                    // Dynamic Status Note
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = DarkSurface,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark)
+                // ==========================================
+                // 1.5. REDESIGNED WORK TIME STATUS CARD
+                // ==========================================
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = DarkCard,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen.copy(alpha = 0.45f)
+                        else PrimaryPurple.copy(alpha = 0.35f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            text = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) {
-                                "هدف امروز تکمیل شد ✓"
-                            } else if (todayTotalSecs > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen.copy(alpha = 0.15f)
+                                        else PrimaryPurple.copy(alpha = 0.15f)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen.copy(alpha = 0.35f)
+                                        else PrimaryPurple.copy(alpha = 0.35f),
+                                        RoundedCornerShape(10.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) Icons.Default.CheckCircle else Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen else PrimaryPurple,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "مجموع زمان تدوین امروز:",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 val hrs = todayTotalSecs / 3600
                                 val mins = (todayTotalSecs % 3600) / 60
-                                "امروز: ${PersianUtils.faNum(hrs)}س و ${PersianUtils.faNum(mins)}د"
-                            } else {
-                                "شروع روز کاری"
-                            },
-                            color = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen else MediaAccentCyan,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
+                                val fullTimeText = when {
+                                    hrs > 0 && mins > 0 -> "${PersianUtils.faNum(hrs)} ساعت و ${PersianUtils.faNum(mins)} دقیقه"
+                                    hrs > 0 -> "${PersianUtils.faNum(hrs)} ساعت کامل"
+                                    mins > 0 -> "${PersianUtils.faNum(mins)} دقیقه"
+                                    todayTotalSecs > 0 -> "${PersianUtils.faNum(todayTotalSecs)} ثانیه"
+                                    else -> "۰ ساعت و ۰ دقیقه"
+                                }
+                                Text(
+                                    text = fullTimeText,
+                                    color = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen else TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen.copy(alpha = 0.15f) else DarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen.copy(alpha = 0.4f) else BorderDark
+                            )
+                        ) {
+                            Text(
+                                text = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) {
+                                    "هدف روزانه تکمیل شد ✓"
+                                } else if (todayTotalSecs > 0) {
+                                    "در حال ثبت روزانه"
+                                } else {
+                                    "بدون کارکرد امروز"
+                                },
+                                color = if (todayTotalSecs >= dailyQuotaSecs && dailyQuotaSecs > 0) SuccessGreen else MediaAccentCyan,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
 
@@ -1036,7 +1128,10 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Speed,
                                     contentDescription = null,
@@ -1045,24 +1140,35 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "تحلیل عملکرد تدوینگر (Efficiency Coach)",
+                                    text = "تحلیل عملکرد تدوینگر",
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary,
-                                    fontSize = 13.5.sp
+                                    fontSize = 13.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            if (sessions.isNotEmpty()) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MediaAccentCyan.copy(alpha = 0.12f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, MediaAccentCyan.copy(alpha = 0.3f))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MediaAccentCyan.copy(alpha = 0.12f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MediaAccentCyan.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "شاخص استمرار: ${PersianUtils.faNum(focusScore)}٪",
+                                        text = "شاخص استمرار: ",
                                         color = MediaAccentCyan,
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "${PersianUtils.faNum(focusScore)}٪",
+                                        color = MediaAccentCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -1116,7 +1222,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "• پیشنهاد CutterPilot: بعد از هر ۴۵ الی ۵۰ دقیقه کار پیوسته روی تایم‌لاین، استراحت ۵ دقیقه‌ای به حفظ تمرکز کات‌ها و رفع خستگی چشم کمک می‌کند.",
+                                text = "• پیشنهاد دستیار هوشمند: بعد از هر ۴۵ الی ۵۰ دقیقه کار پیوسته روی تایم‌لاین، استراحت ۵ دقیقه‌ای به حفظ تمرکز کات‌ها و رفع خستگی چشم کمک می‌کند.",
                                 color = TextMuted,
                                 fontSize = 11.5.sp,
                                 lineHeight = 18.sp
@@ -1151,7 +1257,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "عملکرد ۷ روز اخیر",
+                                    text = "عملکرد ۷ روز اخیر (شنبه تا جمعه)",
                                     fontWeight = FontWeight.Bold,
                                     color = TextPrimary,
                                     fontSize = 13.5.sp
@@ -1235,7 +1341,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "مجموع کارکرد ۷ روز اخیر:",
+                                text = "مجموع کارکرد هفته (شنبه تا جمعه):",
                                 color = TextMuted,
                                 fontSize = 11.5.sp
                             )
@@ -1450,7 +1556,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "از CutterPilot بپرسید",
+                                text = "پرسش از دستیار هوشمند",
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary,
                                 fontSize = 13.5.sp
@@ -1606,7 +1712,7 @@ fun CutterPilotTab(viewModel: MainViewModel) {
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("پاسخ CutterPilot", color = PrimaryPurple, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                            Text("پاسخ دستیار هوشمند", color = PrimaryPurple, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                                         }
                                         IconButton(
                                             onClick = { activeQueryAnswer = null },
@@ -1954,7 +2060,7 @@ private fun determineSmartRecommendation(
         val unDoneCount = clips.count { it.projectId == overdueDeadlineProj.id && it.isDone == 0 }
         val targetClip = clips.firstOrNull { it.projectId == overdueDeadlineProj.id && it.isDone == 0 }?.clipName ?: "کلیپ اصلی"
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "موعد تحویل پروژه «${overdueDeadlineProj.name}» سپری شده و ${PersianUtils.faNum(unDoneCount)} کلیپ ناتمام باقی مانده است. پیشنهاد می‌شود اولویت فوری امروز را به این پروژه اختصاص دهید.",
             actionText = "ادامه تدوین",
             badgeText = "ددلاین گذشته",
@@ -1974,7 +2080,7 @@ private fun determineSmartRecommendation(
         val remainingDays = calculateDaysRemaining(imminentProj.deadlineDate) ?: 1
         val targetClip = clips.firstOrNull { it.projectId == imminentProj.id && it.isDone == 0 }?.clipName ?: "کلیپ اصلی"
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "${PersianUtils.faNum(unDoneCount)} کلیپ از پروژه «${imminentProj.name}» باقی مانده و فقط ${PersianUtils.faNum(remainingDays)} روز تا موعد تحویل فرصت دارید.",
             actionText = "ادامه تدوین",
             badgeText = "موعد نزدیک",
@@ -1990,7 +2096,7 @@ private fun determineSmartRecommendation(
     if (projWithRev != null) {
         val revCount = revisions.count { it.projectId == projWithRev.id && it.isApplied == 0 }
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "${PersianUtils.faNum(revCount)} اصلاحیه اعمال‌نشده برای پروژه «${projWithRev.name}» ثبت شده است که نیازمند بازبینی و تحویل است.",
             actionText = "مشاهده اصلاحات",
             badgeText = "اصلاحات باز",
@@ -2006,7 +2112,7 @@ private fun determineSmartRecommendation(
     }
     if (readyProj != null) {
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "تمام کلیپ‌های پروژه «${readyProj.name}» تکمیل شده است. این پروژه آماده خروجی نهایی، تحویل به کارفرما و تسویه حساب است.",
             actionText = "مدیریت تحویل",
             badgeText = "آماده تحویل",
@@ -2018,7 +2124,7 @@ private fun determineSmartRecommendation(
     // 5. Overdue claim check
     if (overdueProjects.isNotEmpty()) {
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "${PersianUtils.faNum(overdueProjects.size)} پروژه با بیش از ۲۰ روز تاخیر در تسویه به ارزش ${PersianUtils.formatCurrencyFa(sumOverdue)} شناسایی شد. پیگیری وصول مطالبات را مد نظر قرار دهید.",
             actionText = "مشاهده مطالبات",
             badgeText = "مطالبه معوق",
@@ -2033,7 +2139,7 @@ private fun determineSmartRecommendation(
         val firstProj = activeProjects.first()
         val targetClip = clips.firstOrNull { it.projectId == firstProj.id && it.isDone == 0 }?.clipName ?: "کلیپ اصلی"
         return SmartRecommendation(
-            title = "✦ پیشنهاد CutterPilot",
+            title = "✦ پیشنهاد دستیار هوشمند",
             description = "${PersianUtils.faNum(PersianUtils.formatSecondsToHMS(diffSecs))} تا تحقق کامل سهمیه تمرکز امروز باقی است. برای حفظ ریتم کاری، یک جلسه تدوین روی «${firstProj.name}» پیشنهاد می‌شود.",
             actionText = "شروع تمرکز",
             badgeText = "هدف تمرکز",
@@ -2044,7 +2150,7 @@ private fun determineSmartRecommendation(
 
     // 7. Default All Clear
     return SmartRecommendation(
-        title = "✦ پیشنهاد CutterPilot",
+        title = "✦ پیشنهاد دستیار هوشمند",
         description = "عالی! تمام پروژه‌ها، ددلاین‌ها و امور مالی روی برنامه هستند. می‌توانید پروژه جدیدی ثبت کنید یا کارکرد آزاد روی تایم‌لاین داشته باشید.",
         actionText = "مشاهده پیشخوان",
         badgeText = "وضعیت عالی",
@@ -2107,7 +2213,7 @@ private fun answerUserNaturalQuery(
             }
         }
         q.contains("تمرکز") || q.contains("چه کاری") || q.contains("کدام") || q.contains("پیشنهاد") -> {
-            "پیشنهاد هوشمند CutterPilot: $recommendationText"
+            "پیشنهاد دستیار هوشمند: $recommendationText"
         }
         else -> {
             "سؤال شما بررسی شد. شما می‌توانید درباره ساعات تدوین امروز و هفته، پروژه‌های دارای بیشترین زمان، اصلاحات باقی‌مانده، مطالبات معوق و اولویت تمرکز سوال بفرمایید."
@@ -2133,9 +2239,25 @@ private fun calculateLast7Days(sessions: List<TimerSessionEntity>, todayTotalSec
     val list = mutableListOf<DayWorkRecord>()
     val todayJalali = PersianUtils.getCurrentJalaliDate()
 
-    for (dayOffset in 6 downTo 0) {
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, -dayOffset)
+    val now = Calendar.getInstance()
+    val dayOfWeek = now.get(Calendar.DAY_OF_WEEK)
+    val daysSinceSaturday = when (dayOfWeek) {
+        Calendar.SATURDAY -> 0
+        Calendar.SUNDAY -> 1
+        Calendar.MONDAY -> 2
+        Calendar.TUESDAY -> 3
+        Calendar.WEDNESDAY -> 4
+        Calendar.THURSDAY -> 5
+        Calendar.FRIDAY -> 6
+        else -> 0
+    }
+
+    val satCal = Calendar.getInstance()
+    satCal.add(Calendar.DAY_OF_YEAR, -daysSinceSaturday)
+
+    for (dayIndex in 0..6) {
+        val cal = satCal.clone() as Calendar
+        cal.add(Calendar.DAY_OF_YEAR, dayIndex)
 
         val gy = cal.get(Calendar.YEAR)
         val gm = cal.get(Calendar.MONTH) + 1
@@ -2143,23 +2265,25 @@ private fun calculateLast7Days(sessions: List<TimerSessionEntity>, todayTotalSec
         val (jy, jm, jd) = gregorianToJalali(gy, gm, gd)
         val dateStr = String.format(Locale.US, "%04d/%02d/%02d", jy, jm, jd)
 
-        val isToday = (dayOffset == 0) || (dateStr == todayJalali)
+        val isToday = (dateStr == todayJalali)
 
-        val dayName = when (cal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.SATURDAY -> "شنبه"
-            Calendar.SUNDAY -> "۱شنبه"
-            Calendar.MONDAY -> "۲شنبه"
-            Calendar.TUESDAY -> "۳شنبه"
-            Calendar.WEDNESDAY -> "۴شنبه"
-            Calendar.THURSDAY -> "۵شنبه"
-            Calendar.FRIDAY -> "جمعه"
+        val dayName = when (dayIndex) {
+            0 -> "شنبه"
+            1 -> "۱شنبه"
+            2 -> "۲شنبه"
+            3 -> "۳شنبه"
+            4 -> "۴شنبه"
+            5 -> "۵شنبه"
+            6 -> "جمعه"
             else -> ""
         }
 
         val totalSecs = if (isToday) {
             todayTotalSecs
-        } else {
+        } else if (dayIndex <= daysSinceSaturday) {
             sessions.filter { it.date == dateStr }.sumOf { it.durationSeconds }
+        } else {
+            0L
         }
 
         list.add(

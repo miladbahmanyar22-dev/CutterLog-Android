@@ -825,126 +825,47 @@ object ProjectReportExporter {
     }
 
     /**
+     * Generates an official, multi-page PDF document for the project report.
+     * Returns the file stored in context.cacheDir, or null on error.
+     */
+    fun generateReportPdf(context: Context, report: ProjectReportData): File? {
+        return ProjectReportPdfRenderer.generateReportPdf(context, report)
+    }
+
+    /**
      * Generates and shares an official PDF document for the project report.
      */
     fun shareReportAsPdf(context: Context, report: ProjectReportData) {
-        val (tfBold, tfRegular) = getVazirFonts(context)
-
         try {
-            val pdfDoc = PdfDocument()
-            val pageWidth = 595
-            val pageHeight = 842
-            val margin = 30f
-
-            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-            val page = pdfDoc.startPage(pageInfo)
-            val canvas = page.canvas
-
-            // Dark background for PDF document to mirror the design
-            val bgPaint = Paint().apply { color = Color.parseColor("#0A0F1D"); style = Paint.Style.FILL }
-            val borderPaint = Paint().apply { color = Color.parseColor("#1E293B"); style = Paint.Style.STROKE; strokeWidth = 1.5f }
-            val topAccent = Paint().apply { color = Color.parseColor("#6366F1"); style = Paint.Style.FILL }
-
-            canvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
-            canvas.drawRect(12f, 12f, (pageWidth - 12).toFloat(), (pageHeight - 12).toFloat(), borderPaint)
-            canvas.drawRect(12f, 12f, (pageWidth - 12).toFloat(), 16f, topAccent)
-
-            val titlePaint = Paint().apply { isAntiAlias = true; color = Color.parseColor("#818CF8"); textSize = 18f; typeface = tfBold; textAlign = Paint.Align.RIGHT }
-            val subTitlePaint = Paint().apply { isAntiAlias = true; color = Color.parseColor("#F8FAFC"); textSize = 12f; typeface = tfBold; textAlign = Paint.Align.RIGHT }
-            val textLight = Paint().apply { isAntiAlias = true; color = Color.parseColor("#E2E8F0"); textSize = 9.5f; typeface = tfRegular; textAlign = Paint.Align.RIGHT }
-            val textMuted = Paint().apply { isAntiAlias = true; color = Color.parseColor("#94A3B8"); textSize = 8.5f; typeface = tfRegular; textAlign = Paint.Align.RIGHT }
-            val textAccent = Paint().apply { isAntiAlias = true; color = Color.parseColor("#38BDF8"); textSize = 9.5f; typeface = tfBold; textAlign = Paint.Align.RIGHT }
-
-            var curY = margin + 12f
-            canvas.drawText("کاترلاگ (CutterLog)", pageWidth - margin, curY, titlePaint)
-            curY += 16f
-            canvas.drawText("گزارش نهایی و سوابق جامع تدوین پروژه", pageWidth - margin, curY, subTitlePaint)
-
-            // Meta
-            val metaPaint = Paint().apply { isAntiAlias = true; color = Color.parseColor("#CBD5E1"); textSize = 8.5f; typeface = tfBold; textAlign = Paint.Align.LEFT }
-            canvas.drawText("شماره سند: ${report.reportNumber}", margin, margin + 12f, metaPaint)
-            canvas.drawText("تاریخ: ${PersianUtils.faNum(report.reportDate)}", margin, margin + 26f, metaPaint)
-
-            curY += 24f
-            val divPaint = Paint().apply { color = Color.parseColor("#1E293B"); strokeWidth = 0.8f }
-            canvas.drawLine(margin, curY, pageWidth - margin, curY, divPaint)
-
-            curY += 16f
-            canvas.drawText("شناسنامه پروژه", pageWidth - margin, curY, textAccent)
-            curY += 14f
-
-            // Project Info Row
-            canvas.drawText("پروژه: ${report.project.name}  •  استودیو: ${report.studioDisplayName}", pageWidth - margin, curY, textLight)
-            curY += 13f
-            val weddingStr = if (!report.project.weddingDate.isNullOrBlank()) PersianUtils.faNum(report.project.weddingDate) else "ثبت نشده"
-            canvas.drawText("تاریخ مراسم: $weddingStr  •  تاریخ ثبت: ${PersianUtils.faNum(report.project.createdAt)}  •  مهلت: ${report.project.deadlineDate?.let { PersianUtils.faNum(it) } ?: "نامحدود"}", pageWidth - margin, curY, textMuted)
-
-            curY += 20f
-            canvas.drawText("خلاصه عملیات و وضعیت فنی", pageWidth - margin, curY, textAccent)
-            curY += 14f
-            canvas.drawText("تعداد کل کلیپ‌ها: ${PersianUtils.faNum(report.totalClipsCount)}  •  انجام‌شده: ${PersianUtils.faNum(report.completedClipsCount)}  •  پیشرفت: ${PersianUtils.faNum(report.progressPercent)}٪  •  زمان کارکرد خالص: ${report.formattedDurationHMS}", pageWidth - margin, curY, textLight)
-
-            curY += 20f
-            canvas.drawText("کلیپ‌های پروژه", pageWidth - margin, curY, textAccent)
-            curY += 13f
-            report.clips.take(7).forEachIndexed { i, c ->
-                val st = if (c.isDone == 1) "تحویل کامل" else "در حال تدوین"
-                val dateStr = if (!c.endDate.isNullOrBlank()) " (${PersianUtils.faNum(c.endDate)})" else ""
-                canvas.drawText("${PersianUtils.faNum(i + 1)}. ${c.clipName} - وضعیت: $st$dateStr", pageWidth - margin, curY, textLight)
-                curY += 12f
+            val file = generateReportPdf(context, report)
+            if (file == null || !file.exists()) {
+                Toast.makeText(context, "خطا در ایجاد فایل PDF گزارش", Toast.LENGTH_SHORT).show()
+                return
             }
 
-            curY += 14f
-            canvas.drawText("سوابق اصلاحات و بازبینی‌ها", pageWidth - margin, curY, textAccent)
-            curY += 13f
-            if (report.revisionRounds.isEmpty()) {
-                canvas.drawText("✓ هیچ اصلاحیه‌ای برای این پروژه ثبت نشده است (تایید نسخه اول)", pageWidth - margin, curY, textLight)
-                curY += 14f
-            } else {
-                report.revisionRounds.take(4).forEach { r ->
-                    val rStatus = if (r.isRoundComplete) "اعمال و بسته شد" else "در انتظار اعمال"
-                    canvas.drawText("دور ${PersianUtils.faNum(r.phaseNum)}: تعداد ${PersianUtils.faNum(r.totalCount)} مورد - وضعیت: $rStatus", pageWidth - margin, curY, textLight)
-                    curY += 12f
-                    r.items.take(3).forEach { item ->
-                        canvas.drawText("  • ${item.description.take(50)} [${if (item.isApplied == 1) "اعمال شد" else "معلق"}]", pageWidth - margin, curY, textMuted)
-                        curY += 11f
-                    }
-                }
-            }
-
-            curY += 14f
-            canvas.drawText("وضعیت مالی و تسویه", pageWidth - margin, curY, textAccent)
-            curY += 13f
-            canvas.drawText("ارزش قرارداد: ${PersianUtils.formatCurrencyFa(report.project.price)} (${report.priceInWords})", pageWidth - margin, curY, textLight)
-            curY += 12f
-            val settleDesc = if (report.isSettled) "تسویه کامل و نهایی" else "دارای مانده بدهی (${PersianUtils.formatCurrencyFa(report.remainingBalance)})"
-            canvas.drawText("کل دریافتی: ${PersianUtils.formatCurrencyFa(report.totalPaid)}  •  مانده بدهی: ${PersianUtils.formatCurrencyFa(report.remainingBalance)}  •  وضعیت: $settleDesc", pageWidth - margin, curY, textLight)
-
-            curY += 24f
-            canvas.drawLine(margin, curY, pageWidth - margin, curY, divPaint)
-            curY += 15f
-            canvas.drawText("سند دیجیتال استخراج شده از نرم‌افزار مدیریت تدوین کاترلاگ (CutterLog) • معتبر و قطعی", pageWidth - margin, curY, textMuted)
-
-            pdfDoc.finishPage(page)
-
-            val file = File(context.cacheDir, "Report_${report.reportNumber}.pdf")
-            val outputStream = FileOutputStream(file)
-            pdfDoc.writeTo(outputStream)
-            outputStream.flush()
-            outputStream.close()
-            pdfDoc.close()
-
-            val contentUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val contentUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/pdf"
                 putExtra(Intent.EXTRA_STREAM, contentUri)
-                putExtra(Intent.EXTRA_SUBJECT, "گزارش رسمی تدوین پروژه ${report.project.name}")
+                putExtra(Intent.EXTRA_SUBJECT, "گزارش رسمی تدوین پروژه «${report.project.name}»")
+                putExtra(
+                    Intent.EXTRA_TEXT,
+                    "گزارش رسمی و سوابق جامع تدوین پروژه «${report.project.name}»\n" +
+                            "استودیو: ${report.studioDisplayName}\n" +
+                            "شناسه سند: ${report.reportNumber}\n" +
+                            "استخراج‌شده از سامانه کاترلاگ (CutterLog)"
+                )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(shareIntent, "اشتراک‌گذاری نسخه PDF گزارش"))
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "خطا در ایجاد PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "خطا در اشتراک‌گذاری PDF: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }
+

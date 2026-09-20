@@ -66,7 +66,7 @@ fun Modern3DBottomNavigation(
             NavigationTabItem(1, "آرشیو", Icons.Default.Archive),
             NavigationTabItem(2, "حسابرسی", Icons.Default.AccountBalanceWallet),
             NavigationTabItem(3, "پایش زمان", Icons.Default.Timer),
-            NavigationTabItem(4, "دستیار AI", Icons.Default.AutoAwesome),
+            NavigationTabItem(4, "دستیار هوشمند", Icons.Default.AutoAwesome),
             NavigationTabItem(5, "تنظیمات", Icons.Default.Settings)
         )
     }

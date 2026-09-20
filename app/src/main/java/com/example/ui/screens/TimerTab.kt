@@ -4,8 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -138,7 +142,7 @@ fun TimerTab(viewModel: MainViewModel) {
     // Auto-sync with workspace selection if user switched project in Workspace tab and timer is not running
     LaunchedEffect(workspaceSelectedProjectId) {
         if (workspaceSelectedProjectId != null && workspaceSelectedProjectId != selectedProjectIdForTimer) {
-            if (!isTimerRunning && activeSessionSeconds == 0L) {
+            if (!isTimerRunning) {
                 val clips = allClips.filter { it.projectId == workspaceSelectedProjectId }
                 val initialClip = clips.firstOrNull { it.isDone == 0 }?.clipName ?: clips.firstOrNull()?.clipName ?: "کلیپ اصلی"
                 viewModel.setTimerTarget(workspaceSelectedProjectId, initialClip)
@@ -248,8 +252,6 @@ fun TimerTab(viewModel: MainViewModel) {
                     onClick = {
                         if (isTimerRunning) {
                             Toast.makeText(context, "برای تغییر کلیپ هدف، ابتدا تایمر را متوقف کنید", Toast.LENGTH_SHORT).show()
-                        } else if (activeSessionSeconds > 0L) {
-                            Toast.makeText(context, "ابتدا جلسه کاری ثبت‌نشده را ثبت یا لغو کنید", Toast.LENGTH_SHORT).show()
                         } else {
                             showTargetSelectorDialog = true
                         }
@@ -504,37 +506,54 @@ fun TimerTab(viewModel: MainViewModel) {
                 // ==========================================
                 // LEVEL 2: MAIN OPERATIONAL ACTIONS
                 // ==========================================
-                // Primary Control Buttons (Start/Pause, Save Session & Discard)
+                // Primary Control Buttons (Start/Pause & Save Session)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isTimerRunning) {
+                        val isPausedWithTime = activeSessionSeconds > 0
                         Button(
                             onClick = { viewModel.startTimer() },
                             modifier = Modifier
-                                .weight(1.2f)
+                                .weight(1f)
                                 .height(50.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("شروع تایمر", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                text = if (isPausedWithTime) "ادامه تایمر" else "شروع تایمر",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     } else {
                         Button(
                             onClick = { viewModel.pauseTimer() },
                             modifier = Modifier
-                                .weight(1.2f)
+                                .weight(1f)
                                 .height(50.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                         ) {
                             Icon(Icons.Default.Pause, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("توقف موقت", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                text = "توقف موقت",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 
@@ -549,29 +568,56 @@ fun TimerTab(viewModel: MainViewModel) {
                             .weight(1f)
                             .height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Icon(Icons.Default.Save, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("ثبت جلسه", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(
+                            text = "ثبت جلسه",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
+                }
 
-                    if (activeSessionSeconds > 0 && !isTimerRunning) {
-                        IconButton(
-                            onClick = { showDiscardConfirmDialog = true },
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(DarkSurface)
-                                .border(1.dp, BorderDark, RoundedCornerShape(12.dp))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "لغو جلسه جاری",
-                                tint = ErrorRed,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                // Dedicated Discard Session Action (smoothly appears beneath primary buttons when paused)
+                AnimatedVisibility(
+                    visible = activeSessionSeconds > 0 && !isTimerRunning,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    OutlinedButton(
+                        onClick = { showDiscardConfirmDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(42.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = ErrorRed
+                        ),
+                        border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.45f)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "لغو جلسه جاری",
+                            tint = ErrorRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "لغو و حذف کارکرد این جلسه (${PersianUtils.faNum(PersianUtils.formatSecondsToHMS(activeSessionSeconds))})",
+                            color = ErrorRed,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
 
@@ -615,6 +661,71 @@ fun TimerTab(viewModel: MainViewModel) {
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // Fast Clip Switcher for the currently selected project
+                if (selectedProjectClips.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "سوئیچ سریع بین کلیپ‌ها:",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "(زمان کارکرد هر کلیپ تفکیک‌شده ذخیره می‌شود)",
+                            color = TextMuted,
+                            fontSize = 10.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(selectedProjectClips.size) { idx ->
+                            val clip = selectedProjectClips[idx]
+                            val isSelected = clip.clipName == selectedClipName
+                            val isDone = clip.isDone == 1
+                            Surface(
+                                onClick = {
+                                    if (selectedProjectIdForTimer != null) {
+                                        viewModel.setTimerTarget(selectedProjectIdForTimer, clip.clipName)
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MediaAccentCyan.copy(alpha = 0.2f) else DarkInputBg,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelected) MediaAccentCyan else if (isDone) SuccessGreen.copy(alpha = 0.4f) else BorderDark
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isDone) SuccessGreen else if (isSelected) MediaAccentCyan else TextMuted)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = clip.clipName,
+                                        color = if (isSelected) MediaAccentCyan else if (isDone) TextMuted else TextPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             }
                         }
                     }
@@ -753,8 +864,6 @@ fun TimerTab(viewModel: MainViewModel) {
                         onSelectForTimer = {
                             if (isTimerRunning) {
                                 Toast.makeText(context, "برای تغییر هدف، ابتدا تایمر را متوقف کنید", Toast.LENGTH_SHORT).show()
-                            } else if (activeSessionSeconds > 0L) {
-                                Toast.makeText(context, "لطفاً ابتدا جلسه کاری جاری را ثبت یا لغو کنید", Toast.LENGTH_SHORT).show()
                             } else {
                                 val clips = allClips.filter { it.projectId == proj.id }
                                 val targetClip = clips.firstOrNull { it.isDone == 0 }?.clipName ?: clips.firstOrNull()?.clipName ?: "کلیپ اصلی"

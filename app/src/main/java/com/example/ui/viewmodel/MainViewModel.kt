@@ -227,12 +227,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val timerCategory = MutableStateFlow("تدوین / رافکات")
     val timerNote = MutableStateFlow("")
 
+    // Map to preserve uncommitted active session time when switching clips/projects
+    // Key: "projectId_clipName", Value: Triple(accumulatedSeconds, startTimeStr, targetSeconds)
+    private val pendingClipSessions = mutableMapOf<String, Triple<Long, String, Long?>>()
+
     private var timerJob: Job? = null
     private var startTimeStr: String = ""
 
+    private fun getTargetKey(projId: Int?, clipName: String): String = "${projId ?: -1}_$clipName"
+
     fun setTimerTarget(projectId: Int?, clipName: String) {
+        val currentKey = getTargetKey(timerSelectedProjectId.value, timerSelectedClip.value)
+        val newKey = getTargetKey(projectId, clipName)
+
+        if (currentKey == newKey) {
+            timerSelectedProjectId.value = projectId
+            timerSelectedClip.value = clipName
+            return
+        }
+
+        // 1. If currently timer is running or has uncommitted elapsed seconds, pause and store for current target
+        if (_isTimerRunning.value) {
+            pauseTimer()
+        }
+        if (_activeSessionSeconds.value > 0L) {
+            pendingClipSessions[currentKey] = Triple(_activeSessionSeconds.value, startTimeStr, _timerTargetSeconds.value)
+        } else {
+            pendingClipSessions.remove(currentKey)
+        }
+
+        // 2. Switch to new target
         timerSelectedProjectId.value = projectId
         timerSelectedClip.value = clipName
+
+        // 3. Restore any previously pending uncommitted session for the new target
+        val pending = pendingClipSessions.remove(newKey)
+        if (pending != null) {
+            _activeSessionSeconds.value = pending.first
+            startTimeStr = pending.second
+            _timerTargetSeconds.value = pending.third
+        } else {
+            _activeSessionSeconds.value = 0L
+            startTimeStr = ""
+            _timerTargetSeconds.value = null
+        }
     }
 
     fun startTimer(targetSecs: Long? = null) {
@@ -266,6 +304,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isTimerRunning.value = false
         startTimeStr = ""
         timerJob?.cancel()
+        pendingClipSessions.remove(getTargetKey(timerSelectedProjectId.value, timerSelectedClip.value))
     }
 
     private fun pauseTimerWithAlert() {
@@ -275,12 +314,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopAndSaveTimerSession(projectId: Int?, clipName: String? = null, category: String? = null) {
         val sessionDuration = _activeSessionSeconds.value
+        val actualClipName = clipName ?: timerSelectedClip.value
         if (sessionDuration > 0) {
             val endTimeStr = PersianUtils.formatSecondsToHMS(System.currentTimeMillis() / 1000 % 86400)
             viewModelScope.launch {
                 repository.saveTimerSession(
                     projectId = projectId,
-                    clipName = clipName ?: timerSelectedClip.value,
+                    clipName = actualClipName,
                     category = category ?: timerCategory.value,
                     startTime = startTimeStr.ifEmpty { "00:00:00" },
                     endTime = endTimeStr,
@@ -291,6 +331,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _isTimerRunning.value = false
                 startTimeStr = ""
                 timerJob?.cancel()
+                pendingClipSessions.remove(getTargetKey(projectId, actualClipName))
             }
         }
     }
@@ -323,6 +364,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isTimerRunning.value = false
             startTimeStr = ""
             timerJob?.cancel()
+            pendingClipSessions.remove(getTargetKey(projectId, clipName))
         }
     }
 

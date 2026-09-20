@@ -644,6 +644,9 @@ fun WorkspaceTab(viewModel: MainViewModel) {
                 onRecordPayment = { showPaymentDialog = true },
                 onAddRevision = { showAddRevisionDialog = true },
                 onToggleClip = { clip -> viewModel.toggleClipDone(clip) },
+                onStartTimerForClip = { clip ->
+                    viewModel.setTimerTarget(selectedProject.id, clip.clipName)
+                },
                 onToggleRevision = { rev -> viewModel.toggleRevisionApplied(rev) },
                 onDeleteRevision = { rev -> viewModel.deleteRevision(rev) },
                 onMarkRoundComplete = { phase -> viewModel.markRoundComplete(selectedProject.id, phase) },
@@ -1113,6 +1116,7 @@ fun ProjectDetailView(
     onRecordPayment: () -> Unit,
     onAddRevision: () -> Unit,
     onToggleClip: (ProjectClipEntity) -> Unit,
+    onStartTimerForClip: (ProjectClipEntity) -> Unit = {},
     onToggleRevision: (ProjectRevisionEntity) -> Unit,
     onDeleteRevision: (ProjectRevisionEntity) -> Unit = {},
     onMarkRoundComplete: (Int) -> Unit = {},
@@ -1456,7 +1460,8 @@ fun ProjectDetailView(
             totalCount = totalCount,
             totalLoggedHours = totalLoggedHours,
             totalLoggedMins = totalLoggedMins,
-            onToggleClip = onToggleClip
+            onToggleClip = onToggleClip,
+            onStartTimerForClip = onStartTimerForClip
         )
 
         // گروه ۲: اصلاحات (Revisions)
@@ -1718,7 +1723,8 @@ private fun ProjectEditingGroupCard(
     totalCount: Int,
     totalLoggedHours: Int,
     totalLoggedMins: Int,
-    onToggleClip: (ProjectClipEntity) -> Unit
+    onToggleClip: (ProjectClipEntity) -> Unit,
+    onStartTimerForClip: (ProjectClipEntity) -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1818,7 +1824,8 @@ private fun ProjectEditingGroupCard(
                     filteredClips.forEach { clip ->
                         ClipDetailCard(
                             clip = clip,
-                            onToggle = { onToggleClip(clip) }
+                            onToggle = { onToggleClip(clip) },
+                            onStartTimer = { onStartTimerForClip(clip) }
                         )
                     }
                 }
@@ -2638,7 +2645,8 @@ fun RevisionItemRow(
 @Composable
 fun ClipDetailCard(
     clip: ProjectClipEntity,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onStartTimer: (() -> Unit)? = null
 ) {
     val isDone = clip.isDone == 1
 
@@ -2709,6 +2717,22 @@ fun ClipDetailCard(
                         )
                     }
                 }
+            }
+
+            // Quick Timer Button for Clip
+            if (onStartTimer != null) {
+                IconButton(
+                    onClick = onStartTimer,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = "تنظیم تایمر برای این کلیپ",
+                        tint = MediaAccentCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
             }
 
             // Status Indicator Badge

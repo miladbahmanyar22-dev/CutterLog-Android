@@ -1,6 +1,15 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -40,6 +50,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
@@ -77,6 +88,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -90,7 +102,12 @@ import com.example.R
 import com.example.data.entity.AppConfigEntity
 import com.example.data.entity.DefaultClipEntity
 import com.example.data.entity.StudioEntity
+import com.example.ui.components.AboutAppDialog
+import com.example.ui.components.AboutAppTopButton
 import com.example.ui.components.ChipSelectable
+import com.example.ui.components.DeveloperSupportCard
+import com.example.ui.components.DeveloperSupportDialog
+import com.example.ui.components.DeveloperSupportTopBannerButton
 import com.example.ui.components.QuickPriceItem
 import com.example.ui.components.ResponsiveCapsuleGrid
 import com.example.ui.components.parseQuickPrices
@@ -182,12 +199,16 @@ fun SettingsTab(viewModel: MainViewModel) {
 
     var resetTypeToConfirm by remember { mutableStateOf<String?>(null) } // "PROJECTS", "FINANCE", "SETTINGS", "BASE", "ALL"
 
+    var showAboutAppDialog by remember { mutableStateOf(false) }
+    var showDeveloperSupportDialog by remember { mutableStateOf(false) }
+
     val navItems = listOf(
         Pair("عمومی و هدف", Icons.Default.Settings),
         Pair("پکیج‌ها و کلیپ‌ها", Icons.Default.Movie),
         Pair("مالی و برندینگ", Icons.Default.Receipt),
         Pair("ایمنی و بک‌آپ", Icons.Default.Security),
-        Pair("مرکز بازنشانی", Icons.Default.Warning)
+        Pair("مرکز بازنشانی", Icons.Default.Warning),
+        Pair("درباره کاترلاگ", Icons.Default.Info)
     )
 
     Box(
@@ -205,6 +226,49 @@ fun SettingsTab(viewModel: MainViewModel) {
         ) {
             // Header Section
             SettingsHeader()
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Coffee Support Button with warm coffee gradient
+            Surface(
+                onClick = { showDeveloperSupportDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("support_coffee_button"),
+                shape = RoundedCornerShape(14.dp),
+                color = Color.Transparent,
+                border = BorderStroke(1.5.dp, Color(0xFFFFB74D).copy(alpha = 0.6f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF4E342E), // Rich Coffee Brown
+                                    Color(0xFF5D4037), // Warm Medium Coffee
+                                    Color(0xFF3E2723)  // Dark Espresso
+                                )
+                            )
+                        )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("☕", fontSize = 18.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "حمایت از توسعه‌دهنده (یک قهوه مهمان کن)",
+                            color = Color(0xFFFFECB3),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -228,17 +292,22 @@ fun SettingsTab(viewModel: MainViewModel) {
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                        horizontalArrangement = Arrangement.Start
                     ) {
-                        Icon(
-                            imageVector = itemIcon,
-                            contentDescription = null,
-                            tint = if (isSelected) Color.White else TextSecondary,
-                            modifier = Modifier.size(17.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier.width(20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = itemIcon,
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else TextSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = tabName,
                             color = if (isSelected) Color.White else TextPrimary,
@@ -1171,94 +1240,82 @@ fun SettingsTab(viewModel: MainViewModel) {
                                 }
                             }
                         }
+
+                        // ================= 5: ABOUT CATALOG =================
+                        5 -> {
+                            SectionTitleHeader(
+                                title = "درباره کاترلاگ",
+                                subtitle = "شناسنامه نرم‌افزار، مشخصات نسخه و معرفی امکانات",
+                                icon = Icons.Default.Info
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_cutterlog_logo_card),
+                                    contentDescription = "آیکون کاترلاگ",
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(RoundedCornerShape(18.dp))
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "کاترلاگ (Cutterlog Pro)",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                    fontSize = 18.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = DarkSurface,
+                                    border = BorderStroke(1.dp, BorderDark)
+                                ) {
+                                    Text(
+                                        text = "نسخه ${PersianUtils.faNum(BuildConfig.VERSION_NAME)}",
+                                        color = PrimaryPurple,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                    text = "کاترلاگ یک ابزار حرفه‌ای برای مدیریت پروژه‌ها، استودیوها، زمان، حسابرسی و امور مالی مرتبط با فعالیت‌های تدوین و ادیت ویدئو است که به صورت کاملاً آفلاین و محلی فعالیت می‌کند.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 22.sp,
+                                    fontSize = 12.5.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp)
+                                )
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    AboutFeatureRow(icon = Icons.Default.Code, title = "توسعه‌دهنده", value = "میلاد بهمنیار")
+                                    AboutFeatureRow(icon = Icons.Default.Security, title = "امنیت و حریم خصوصی", value = "ذخیره‌سازی ۱۰۰٪ محلی (SQLite)")
+                                    AboutFeatureRow(icon = Icons.Default.Speed, title = "عملکرد", value = "بهینه‌سازی شده برای تدوینگران ویدئو")
+                                }
+                            }
+                        }
                     }
-                }
-            }
-
-            // ABOUT APPLICATION CARD
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkCard),
-                border = BorderStroke(1.dp, BorderDark)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = PrimaryPurple,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "درباره نرم‌افزار",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            fontSize = 14.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_cutterlog_logo_card),
-                        contentDescription = "آیکون کاترلاگ",
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "کاترلاگ",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        fontSize = 19.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = DarkSurface,
-                        border = BorderStroke(1.dp, BorderDark)
-                    ) {
-                        Text(
-                            text = "نسخه ${PersianUtils.faNum(BuildConfig.VERSION_NAME)}",
-                            color = PrimaryPurple,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.5.sp,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "کاترلاگ یک ابزار برای مدیریت پروژه‌ها، استودیوها، زمان، حسابرسی و امور مالی مرتبط با فعالیت‌های تدوین و ادیت ویدئو است.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 22.sp,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                    )
                 }
             }
         }
@@ -1581,6 +1638,20 @@ fun SettingsTab(viewModel: MainViewModel) {
             shape = RoundedCornerShape(16.dp)
         )
     }
+
+    // 6. ABOUT APP COMPREHENSIVE DIALOG
+    if (showAboutAppDialog) {
+        AboutAppDialog(
+            onDismissRequest = { showAboutAppDialog = false }
+        )
+    }
+
+    // 7. DEVELOPER SUPPORT DIALOG
+    if (showDeveloperSupportDialog) {
+        DeveloperSupportDialog(
+            onDismissRequest = { showDeveloperSupportDialog = false }
+        )
+    }
 }
 
 // ================= HELPER UI COMPONENTS =================
@@ -1766,6 +1837,35 @@ private fun ResetActionButton(
                 tint = ErrorRed,
                 modifier = Modifier.size(16.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun AboutFeatureRow(
+    icon: ImageVector,
+    title: String,
+    value: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = DarkSurface,
+        border = BorderStroke(1.dp, BorderDark)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, tint = PrimaryPurple, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(text = title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+            Text(text = value, color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
