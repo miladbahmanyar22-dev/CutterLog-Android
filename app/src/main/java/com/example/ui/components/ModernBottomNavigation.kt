@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -66,8 +66,7 @@ fun Modern3DBottomNavigation(
             NavigationTabItem(1, "آرشیو", Icons.Default.Archive),
             NavigationTabItem(2, "حسابرسی", Icons.Default.AccountBalanceWallet),
             NavigationTabItem(3, "پایش زمان", Icons.Default.Timer),
-            NavigationTabItem(4, "دستیار هوشمند", Icons.Default.AutoAwesome),
-            NavigationTabItem(5, "تنظیمات", Icons.Default.Settings)
+            NavigationTabItem(4, "دستیار هوشمند", Icons.Default.AutoAwesome)
         )
     }
 
@@ -82,8 +81,8 @@ fun Modern3DBottomNavigation(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(68.dp)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
+                .height(74.dp)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -107,34 +106,37 @@ private fun ModernNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scale by animateFloatAsState(
-        targetValue = if (isSelected) 1.06f else 1.0f,
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed = interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed.value) 0.85f else 1.0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "pressScale"
+    )
+
+    val scale by animateFloatAsState(
+        targetValue = (if (isSelected) 1.2f else 1.0f) * pressScale,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMedium
         ),
         label = "tabScale"
     )
 
     val iconColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else TextSecondary,
+        targetValue = if (isSelected) PrimaryPurple else TextSecondary,
         animationSpec = tween(durationMillis = 200),
         label = "iconColor"
     )
 
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else TextSecondary,
+        targetValue = if (isSelected) PrimaryPurple else TextSecondary,
         animationSpec = tween(durationMillis = 200),
         label = "textColor"
     )
-
-    val pillBackground by animateColorAsState(
-        targetValue = if (isSelected) PrimaryPurple else Color.Transparent,
-        animationSpec = tween(durationMillis = 200),
-        label = "pillBg"
-    )
-
-    val interactionSource = remember { MutableInteractionSource() }
 
     Column(
         modifier = modifier
@@ -144,16 +146,14 @@ private fun ModernNavItem(
                 indication = null,
                 onClick = onClick
             )
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Icon Pod Container
+        // Icon Container
         Box(
             modifier = Modifier
-                .size(width = 44.dp, height = 30.dp)
-                .clip(RoundedCornerShape(15.dp))
-                .background(pillBackground)
+                .size(32.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -164,7 +164,7 @@ private fun ModernNavItem(
                 imageVector = item.icon,
                 contentDescription = item.title,
                 tint = iconColor,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
 

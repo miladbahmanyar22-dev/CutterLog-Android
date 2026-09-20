@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,10 +25,14 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -147,8 +153,18 @@ fun CutterLogTopHeader(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 // Left side in RTL (End): Settings Icon Button (48dp touch-friendly M3 IconButton)
+                var rotationClicks by remember { mutableStateOf(0) }
+                val rotation by animateFloatAsState(
+                    targetValue = rotationClicks * 180f,
+                    animationSpec = tween(durationMillis = 400),
+                    label = "gearRotation"
+                )
+
                 IconButton(
-                    onClick = onSettingsClick,
+                    onClick = {
+                        rotationClicks++
+                        onSettingsClick()
+                    },
                     modifier = Modifier
                         .size(44.dp)
                         .testTag("header_settings_button"),
@@ -159,7 +175,9 @@ fun CutterLogTopHeader(
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "تنظیمات کاترلاگ",
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier
+                            .size(22.dp)
+                            .graphicsLayer(rotationZ = rotation)
                     )
                 }
             }

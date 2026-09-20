@@ -26,13 +26,17 @@ fun CutterLogMainScreen(viewModel: MainViewModel) {
         Scaffold(
             topBar = {
                 CutterLogTopHeader(
-                    onSettingsClick = { viewModel.setSelectedTab(5) }
+                    onSettingsClick = { 
+                        viewModel.setSelectedTab(5)
+                    }
                 )
             },
             bottomBar = {
                 Modern3DBottomNavigation(
-                    selectedTab = selectedTab,
-                    onTabSelected = { viewModel.setSelectedTab(it) }
+                    selectedTab = if (selectedTab == 5) 0 else selectedTab,
+                    onTabSelected = { tab ->
+                        viewModel.setSelectedTab(tab)
+                    }
                 )
             },
             containerColor = DarkBg
@@ -55,3 +59,5 @@ fun CutterLogMainScreen(viewModel: MainViewModel) {
         }
     }
 }
+
+
