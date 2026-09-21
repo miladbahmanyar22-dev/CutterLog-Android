@@ -293,6 +293,10 @@ fun <T> ResponsiveCapsuleGrid(
                 chunk.forEach { item ->
                     itemContent(item, Modifier.weight(1f))
                 }
+                val emptySlots = maxPerRow - chunk.size
+                repeat(emptySlots) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }

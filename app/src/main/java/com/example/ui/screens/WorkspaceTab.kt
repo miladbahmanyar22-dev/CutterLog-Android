@@ -3381,17 +3381,48 @@ fun EditProjectDialog(
                 // 4. Studio
                 Column {
                     Text("آتلیه / کارفرما:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     ResponsiveCapsuleGrid(
                         items = studios,
-                        maxPerRow = 3
-                    ) { s, modifier ->
-                        ChipSelectable(
-                            text = s,
-                            isSelected = studio == s,
-                            onSelect = { studio = s },
-                            modifier = modifier
-                        )
+                        maxPerRow = 2
+                    ) { s, itemModifier ->
+                        val isSelected = studio == s
+                        Surface(
+                            onClick = { studio = s },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) PrimaryPurple else DarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) PrimaryPurple else BorderDark
+                            ),
+                            modifier = itemModifier.clip(RoundedCornerShape(10.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = PersianUtils.formatStudioName(s),
+                                    color = if (isSelected) Color.White else TextPrimary,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
 

@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -160,8 +161,8 @@ fun CreateProjectDialog(
                     .imePadding(),
                 contentAlignment = Alignment.Center
             ) {
-                val dialogWidth = maxWidth * 0.80f
-                val dialogMaxHeight = maxHeight * 0.82f
+                val dialogWidth = if (maxWidth > 600.dp) 540.dp else (maxWidth * 0.94f)
+                val dialogMaxHeight = maxHeight * 0.90f
 
                 Surface(
                     modifier = Modifier
@@ -354,14 +355,45 @@ fun CreateProjectDialog(
                                     Spacer(modifier = Modifier.height(6.dp))
                                     ResponsiveCapsuleGrid(
                                         items = studios,
-                                        maxPerRow = 3
-                                    ) { s, modifier ->
-                                        ChipSelectable(
-                                            text = s,
-                                            isSelected = studio == s,
-                                            onSelect = { studio = s },
-                                            modifier = modifier
-                                        )
+                                        maxPerRow = 2
+                                    ) { s, itemModifier ->
+                                        val isSelected = studio == s
+                                        Surface(
+                                            onClick = { studio = s },
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSelected) PrimaryPurple else DarkSurface,
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                if (isSelected) PrimaryPurple else BorderDark
+                                            ),
+                                            modifier = itemModifier.clip(RoundedCornerShape(10.dp))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                if (isSelected) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                }
+                                                Text(
+                                                    text = PersianUtils.formatStudioName(s),
+                                                    color = if (isSelected) Color.White else TextPrimary,
+                                                    fontSize = 12.5.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -508,18 +540,48 @@ fun CreateProjectDialog(
                                         ResponsiveCapsuleGrid(
                                             items = packages,
                                             maxPerRow = 2
-                                        ) { pkg, modifier ->
-                                            ChipSelectable(
-                                                text = pkg.first,
-                                                isSelected = selectedPackageName == pkg.first,
-                                                onSelect = {
+                                        ) { pkg, itemModifier ->
+                                            val isSelected = selectedPackageName == pkg.first
+                                            Surface(
+                                                onClick = {
                                                     selectedPackageName = pkg.first
                                                     selectedClips.clear()
                                                     selectedClips.addAll(pkg.second)
                                                 },
-                                                accentColor = PrimaryPurple,
-                                                modifier = modifier
-                                            )
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = if (isSelected) PrimaryPurple else DarkSurface,
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    1.dp,
+                                                    if (isSelected) PrimaryPurple else BorderDark
+                                                ),
+                                                modifier = itemModifier.clip(RoundedCornerShape(10.dp))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
+                                                ) {
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = null,
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(15.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                    }
+                                                    Text(
+                                                        text = pkg.first,
+                                                        color = if (isSelected) Color.White else TextPrimary,
+                                                        fontSize = 12.5.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -569,16 +631,46 @@ fun CreateProjectDialog(
                                     ResponsiveCapsuleGrid(
                                         items = currentClipList,
                                         maxPerRow = 2
-                                    ) { clipName, modifier ->
+                                    ) { clipName, itemModifier ->
                                         val isSel = selectedClips.contains(clipName)
-                                        ChipSelectable(
-                                            text = clipName,
-                                            isSelected = isSel,
-                                            onSelect = {
+                                        Surface(
+                                            onClick = {
                                                 if (isSel) selectedClips.remove(clipName) else selectedClips.add(clipName)
                                             },
-                                            modifier = modifier
-                                        )
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = if (isSel) PrimaryPurple else DarkSurface,
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                if (isSel) PrimaryPurple else BorderDark
+                                            ),
+                                            modifier = itemModifier.clip(RoundedCornerShape(10.dp))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                if (isSel) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                }
+                                                Text(
+                                                    text = clipName,
+                                                    color = if (isSel) Color.White else TextPrimary,
+                                                    fontSize = 12.5.sp,
+                                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -590,120 +682,192 @@ fun CreateProjectDialog(
                                 icon = Icons.Default.Schedule,
                                 title = "زمان‌بندی و مهلت تحویل"
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    // Main Stepper Card
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = DarkInputBg,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "مدت مهلت تحویل پروژه",
+                                                    color = TextSecondary,
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = "${PersianUtils.faNum(deadlineDays)} روز کاری",
+                                                        color = PrimaryPurple,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = " (از زمان ثبت)",
+                                                        color = TextMuted,
+                                                        fontSize = 11.sp
+                                                    )
+                                                }
+                                            }
+
+                                            // Stepper Controls
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                IconButton(
+                                                    onClick = { if (deadlineDays > 1) deadlineDays-- },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(DarkSurface)
+                                                        .border(1.dp, BorderDark, RoundedCornerShape(8.dp))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Remove,
+                                                        contentDescription = "کاهش مهلت",
+                                                        tint = TextSecondary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = DarkSurface,
+                                                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.5f)),
+                                                    modifier = Modifier
+                                                        .width(48.dp)
+                                                        .height(36.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text(
+                                                            text = PersianUtils.faNum(deadlineDays),
+                                                            color = TextPrimary,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                }
+
+                                                IconButton(
+                                                    onClick = { deadlineDays++ },
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(DarkSurface)
+                                                        .border(1.dp, BorderDark, RoundedCornerShape(8.dp))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Add,
+                                                        contentDescription = "افزایش مهلت",
+                                                        tint = TextSecondary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Calculated Estimated Due Date
+                                    val estimatedDueDate = remember(deadlineDays, weddingDate) {
+                                        val baseDate = weddingDate ?: PersianUtils.getCurrentJalaliDate()
+                                        PersianUtils.addDaysToJalali(baseDate, deadlineDays)
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = PrimaryPurple.copy(alpha = 0.08f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.25f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DateRange,
+                                                contentDescription = null,
+                                                tint = PrimaryPurple,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "موعد تحویل تخمینی: ",
+                                                color = PrimaryPurple,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = PersianUtils.faNum(estimatedDueDate),
+                                                color = TextPrimary,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+
+                                    // Quick Presets
+                                    Column {
                                         Text(
-                                            text = "مهلت تحویل پروژه:",
-                                            color = TextSecondary,
-                                            fontSize = 12.sp,
+                                            text = "انتخاب سریع مهلت:",
+                                            color = TextMuted,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium
                                         )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "${PersianUtils.faNum(deadlineDays)} روز کاری از زمان ثبت",
-                                            color = TextPrimary,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        val presetDays = listOf(
+                                            3 to "۳ روز (فوری)",
+                                            7 to "۷ روز (یک هفته)",
+                                            10 to "۱۰ روز",
+                                            14 to "۱۴ روز (دو هفته)",
+                                            21 to "۲۱ روز",
+                                            30 to "۳۰ روز (یک ماه)"
                                         )
-                                    }
-
-                                    // Stepper Controls
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = { if (deadlineDays > 1) deadlineDays-- },
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(DarkSurface)
-                                                .border(1.dp, BorderDark, RoundedCornerShape(8.dp))
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Remove,
-                                                contentDescription = "کاهش مهلت",
-                                                tint = TextSecondary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-
-                                        OutlinedTextField(
-                                            value = deadlineDays.toString(),
-                                            onValueChange = { deadlineDays = it.toIntOrNull() ?: 1 },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            textStyle = androidx.compose.ui.text.TextStyle(
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                fontWeight = FontWeight.Bold,
-                                                color = TextPrimary,
-                                                fontSize = 14.sp
-                                            ),
-                                            modifier = Modifier
-                                                .width(64.dp)
-                                                .height(44.dp),
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = DarkInputBg,
-                                                unfocusedContainerColor = DarkInputBg,
-                                                focusedBorderColor = PrimaryPurple,
-                                                unfocusedBorderColor = BorderDark
-                                            )
-                                        )
-
-                                        IconButton(
-                                            onClick = { deadlineDays++ },
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(DarkSurface)
-                                                .border(1.dp, BorderDark, RoundedCornerShape(8.dp))
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = "افزایش مهلت",
-                                                tint = TextSecondary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Quick Days Presets
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    listOf(3, 7, 10, 14, 21, 30).forEach { days ->
-                                        val isSelected = deadlineDays == days
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isSelected) PrimaryPurple.copy(alpha = 0.2f) else DarkSurface,
-                                            border = androidx.compose.foundation.BorderStroke(
-                                                1.dp,
-                                                if (isSelected) PrimaryPurple else BorderDark.copy(alpha = 0.6f)
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable { deadlineDays = days }
-                                        ) {
-                                            Box(
-                                                modifier = Modifier.padding(vertical = 6.dp),
-                                                contentAlignment = Alignment.Center
+                                        ResponsiveCapsuleGrid(
+                                            items = presetDays,
+                                            maxPerRow = 2
+                                        ) { (days, label), itemModifier ->
+                                            val isSelected = deadlineDays == days
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = if (isSelected) PrimaryPurple.copy(alpha = 0.2f) else DarkSurface,
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    1.dp,
+                                                    if (isSelected) PrimaryPurple else BorderDark.copy(alpha = 0.6f)
+                                                ),
+                                                modifier = itemModifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable { deadlineDays = days }
                                             ) {
-                                                Text(
-                                                    text = "${PersianUtils.faNum(days)} روز",
-                                                    color = if (isSelected) PrimaryPurple else TextSecondary,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 8.dp, vertical = 7.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = PersianUtils.faNum(label),
+                                                        color = if (isSelected) PrimaryPurple else TextSecondary,
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             }
                                         }
                                     }
