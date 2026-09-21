@@ -28,6 +28,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -103,6 +107,15 @@ private enum class FinanceFilterTab {
     OVERDUE_ONLY
 }
 
+enum class FinanceTimePeriod(val titleFa: String, val subtitleFa: String) {
+    ALL_TIME("کل دوران", "تمام تاریخچه"),
+    THIS_MONTH("ماه جاری", "۳۰ روز اخیر / ماه فعلی"),
+    LAST_3_MONTHS("۳ ماه اخیر", "فصل جاری"),
+    LAST_6_MONTHS("۶ ماه اخیر", "نیم‌سال اخیر"),
+    THIS_YEAR("سال جاری", "از ابتدای سال خورشیدی"),
+    CUSTOM("بازه دلخواه", "تاریخ انتخابی شما")
+}
+
 @Composable
 fun FinanceTab(viewModel: MainViewModel) {
     val projects by viewModel.allProjects.collectAsState()
@@ -117,6 +130,12 @@ fun FinanceTab(viewModel: MainViewModel) {
     // Search and filter state
     var searchQuery by remember { mutableStateOf("") }
     var activeFilter by remember { mutableStateOf(FinanceFilterTab.ALL) }
+
+    // Time Period Filter State
+    var selectedTimePeriod by remember { mutableStateOf(FinanceTimePeriod.ALL_TIME) }
+    var showTimePeriodDialog by remember { mutableStateOf(false) }
+    var customStartDate by remember { mutableStateOf("1403/01/01") }
+    var customEndDate by remember { mutableStateOf("1403/12/29") }
 
     // Action Dialog States
     var showBulkPaymentDialog by remember { mutableStateOf(false) }
@@ -134,13 +153,92 @@ fun FinanceTab(viewModel: MainViewModel) {
 
     val context = LocalContext.current
 
-    // Global Financial Calculations
-    val totalContractAmount = projects.sumOf { it.price }
-    val totalCollected = payments.sumOf { it.amount }
+    // Period-filtered Projects and Payments
+    val currentJalali = remember { PersianUtils.getCurrentJalaliDate() }
+    val currentYearMonth = remember { PersianUtils.parseJalaliYearMonth(currentJalali) }
+
+    val periodFilteredProjects = remember(projects, selectedTimePeriod, customStartDate, customEndDate, currentJalali) {
+        when (selectedTimePeriod) {
+            FinanceTimePeriod.ALL_TIME -> projects
+            FinanceTimePeriod.THIS_MONTH -> {
+                projects.filter { proj ->
+                    val projDate = proj.weddingDate?.ifBlank { null } ?: proj.createdAt
+                    val ym = PersianUtils.parseJalaliYearMonth(projDate)
+                    if (currentYearMonth != null && ym != null) {
+                        ym.first == currentYearMonth.first && ym.second == currentYearMonth.second
+                    } else {
+                        PersianUtils.getDaysElapsed(projDate) <= 30
+                    }
+                }
+            }
+            FinanceTimePeriod.LAST_3_MONTHS -> {
+                projects.filter { proj ->
+                    val projDate = proj.weddingDate?.ifBlank { null } ?: proj.createdAt
+                    PersianUtils.getDaysElapsed(projDate) <= 90
+                }
+            }
+            FinanceTimePeriod.LAST_6_MONTHS -> {
+                projects.filter { proj ->
+                    val projDate = proj.weddingDate?.ifBlank { null } ?: proj.createdAt
+                    PersianUtils.getDaysElapsed(projDate) <= 180
+                }
+            }
+            FinanceTimePeriod.THIS_YEAR -> {
+                val curYear = currentYearMonth?.first ?: 1404
+                projects.filter { proj ->
+                    val projDate = proj.weddingDate?.ifBlank { null } ?: proj.createdAt
+                    val ym = PersianUtils.parseJalaliYearMonth(projDate)
+                    ym?.first == curYear
+                }
+            }
+            FinanceTimePeriod.CUSTOM -> {
+                val start = customStartDate.trim()
+                val end = customEndDate.trim()
+                projects.filter { proj ->
+                    val projDate = proj.weddingDate?.ifBlank { null } ?: proj.createdAt
+                    projDate >= start && projDate <= end
+                }
+            }
+        }
+    }
+
+    val periodFilteredProjectIds = remember(periodFilteredProjects) {
+        periodFilteredProjects.map { it.id }.toSet()
+    }
+
+    val periodFilteredPayments = remember(payments, selectedTimePeriod, periodFilteredProjectIds, customStartDate, customEndDate) {
+        when (selectedTimePeriod) {
+            FinanceTimePeriod.ALL_TIME -> payments
+            FinanceTimePeriod.THIS_MONTH,
+            FinanceTimePeriod.LAST_3_MONTHS,
+            FinanceTimePeriod.LAST_6_MONTHS,
+            FinanceTimePeriod.THIS_YEAR,
+            FinanceTimePeriod.CUSTOM -> {
+                payments.filter { p ->
+                    periodFilteredProjectIds.contains(p.projectId) ||
+                    (p.date.isNotBlank() && when (selectedTimePeriod) {
+                        FinanceTimePeriod.THIS_MONTH -> PersianUtils.getDaysElapsed(p.date) <= 30
+                        FinanceTimePeriod.LAST_3_MONTHS -> PersianUtils.getDaysElapsed(p.date) <= 90
+                        FinanceTimePeriod.LAST_6_MONTHS -> PersianUtils.getDaysElapsed(p.date) <= 180
+                        FinanceTimePeriod.THIS_YEAR -> {
+                            val curYear = currentYearMonth?.first ?: 1404
+                            PersianUtils.parseJalaliYearMonth(p.date)?.first == curYear
+                        }
+                        FinanceTimePeriod.CUSTOM -> p.date >= customStartDate.trim() && p.date <= customEndDate.trim()
+                        else -> true
+                    })
+                }
+            }
+        }
+    }
+
+    // Global Financial Calculations based on selected time period
+    val totalContractAmount = periodFilteredProjects.sumOf { it.price }
+    val totalCollected = periodFilteredPayments.sumOf { it.amount }
     val totalMarketDebt = (totalContractAmount - totalCollected).coerceAtLeast(0.0)
 
     // Overdue calculations (>20 days)
-    val overdueProjects = projects.filter { proj ->
+    val overdueProjects = periodFilteredProjects.filter { proj ->
         val projPayments = payments.filter { it.projectId == proj.id }
         val projPaid = projPayments.sumOf { it.amount }
         val isUnsettled = proj.isSettled == 0 && projPaid < proj.price
@@ -152,13 +250,16 @@ fun FinanceTab(viewModel: MainViewModel) {
         (proj.price - projPaid).coerceAtLeast(0.0)
     }
 
-    // Debtor studios count
+    // Debtor studios count within the period
     val debtorStudiosCount = studios.count { studio ->
-        val studioProjects = projects.filter { it.studioName == studio.name }
-        val studioPrice = studioProjects.sumOf { it.price }
-        val studioPaid = payments.filter { p -> studioProjects.any { it.id == p.projectId } }.sumOf { it.amount }
-        val studioDebt = (studioPrice - studioPaid).coerceAtLeast(0.0)
-        studioDebt > 0
+        val studioProjects = periodFilteredProjects.filter { it.studioName == studio.name }
+        if (studioProjects.isEmpty()) false
+        else {
+            val studioPrice = studioProjects.sumOf { it.price }
+            val studioPaid = payments.filter { p -> studioProjects.any { it.id == p.projectId } }.sumOf { it.amount }
+            val studioDebt = (studioPrice - studioPaid).coerceAtLeast(0.0)
+            studioDebt > 0
+        }
     }
 
     if (selectedStudioForDetail != null) {
@@ -192,21 +293,61 @@ fun FinanceTab(viewModel: MainViewModel) {
                 .verticalScroll(scrollState)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Screen Title & Subtitle
-            Text(
-                text = "حسابرسی",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-                color = TextPrimary,
-                fontSize = 24.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "وضعیت مالی پروژه‌ها و استودیوها",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                fontSize = 13.sp
-            )
+            // Screen Title & Header Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "حسابرسی",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary,
+                        fontSize = 24.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "وضعیت مالی پروژه‌ها و استودیوها",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+
+                // Time Period Filter Capsule Button
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { showTimePeriodDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selectedTimePeriod != FinanceTimePeriod.ALL_TIME) PrimaryPurple.copy(alpha = 0.2f) else DarkSurface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selectedTimePeriod != FinanceTimePeriod.ALL_TIME) PrimaryPurple else BorderDark
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = "فیلتر بازه زمانی درآمد",
+                            tint = if (selectedTimePeriod != FinanceTimePeriod.ALL_TIME) PrimaryPurple else TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = selectedTimePeriod.titleFa,
+                            color = if (selectedTimePeriod != FinanceTimePeriod.ALL_TIME) PrimaryPurple else TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -218,7 +359,9 @@ fun FinanceTab(viewModel: MainViewModel) {
                 debtorStudiosCount = debtorStudiosCount,
                 totalStudiosCount = studios.size,
                 overdueCount = overdueProjects.size,
-                overdueAmount = overdueClaimsAmount
+                overdueAmount = overdueClaimsAmount,
+                selectedPeriod = selectedTimePeriod,
+                onPeriodClick = { showTimePeriodDialog = true }
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -517,6 +660,28 @@ fun FinanceTab(viewModel: MainViewModel) {
         )
     }
 
+    // --- TIME PERIOD SELECTOR DIALOG ---
+    if (showTimePeriodDialog) {
+        FinanceTimePeriodDialog(
+            currentPeriod = selectedTimePeriod,
+            customStart = customStartDate,
+            customEnd = customEndDate,
+            onSelectPeriod = { period ->
+                selectedTimePeriod = period
+                if (period != FinanceTimePeriod.CUSTOM) {
+                    showTimePeriodDialog = false
+                }
+            },
+            onSaveCustomRange = { start, end ->
+                customStartDate = start
+                customEndDate = end
+                selectedTimePeriod = FinanceTimePeriod.CUSTOM
+                showTimePeriodDialog = false
+            },
+            onDismiss = { showTimePeriodDialog = false }
+        )
+    }
+
     // --- INVOICE PREVIEW DIALOG ---
     if (activeInvoiceData != null) {
         InvoicePreviewDialog(
@@ -524,6 +689,195 @@ fun FinanceTab(viewModel: MainViewModel) {
             onDismiss = { activeInvoiceData = null }
         )
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+// COMPONENT: TIME PERIOD SELECTOR DIALOG
+// -------------------------------------------------------------------------------------------------
+@Composable
+private fun FinanceTimePeriodDialog(
+    currentPeriod: FinanceTimePeriod,
+    customStart: String,
+    customEnd: String,
+    onSelectPeriod: (FinanceTimePeriod) -> Unit,
+    onSaveCustomRange: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var isCustomMode by remember { mutableStateOf(currentPeriod == FinanceTimePeriod.CUSTOM) }
+    var startDateInput by remember { mutableStateOf(customStart) }
+    var endDateInput by remember { mutableStateOf(customEnd) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = PrimaryPurple,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "انتخاب بازه زمانی گزارش مالی",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "درآمد، مبالغ قراردادها و مطالبات بر اساس بازه انتخابی شما محاسبه خواهند شد:",
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 18.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                FinanceTimePeriod.values().forEach { period ->
+                    val isSelected = (!isCustomMode && currentPeriod == period) || (isCustomMode && period == FinanceTimePeriod.CUSTOM)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                if (period == FinanceTimePeriod.CUSTOM) {
+                                    isCustomMode = true
+                                } else {
+                                    isCustomMode = false
+                                    onSelectPeriod(period)
+                                }
+                            },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) PrimaryPurple.copy(alpha = 0.15f) else DarkSurface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) PrimaryPurple else BorderDark
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = period.titleFa,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) PrimaryPurple else TextPrimary
+                                )
+                                Text(
+                                    text = period.subtitleFa,
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = PrimaryPurple,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isCustomMode) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = DarkSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "تعیین بازه شمسی (مثال: ۱۴۰۳/۰۶/۰۱)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = startDateInput,
+                                    onValueChange = { startDateInput = it },
+                                    label = { Text("از تاریخ", fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = DarkInputBg,
+                                        unfocusedContainerColor = DarkInputBg,
+                                        focusedBorderColor = PrimaryPurple,
+                                        unfocusedBorderColor = BorderDark
+                                    )
+                                )
+                                OutlinedTextField(
+                                    value = endDateInput,
+                                    onValueChange = { endDateInput = it },
+                                    label = { Text("تا تاریخ", fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = DarkInputBg,
+                                        unfocusedContainerColor = DarkInputBg,
+                                        focusedBorderColor = PrimaryPurple,
+                                        unfocusedBorderColor = BorderDark
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (isCustomMode) {
+                Button(
+                    onClick = {
+                        onSaveCustomRange(startDateInput, endDateInput)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple)
+                ) {
+                    Text("اعمال بازه دلخواه", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text("بستن", color = TextSecondary)
+                }
+            }
+        },
+        dismissButton = {
+            if (isCustomMode) {
+                TextButton(onClick = { isCustomMode = false }) {
+                    Text("انصراف", color = TextMuted)
+                }
+            }
+        },
+        containerColor = DarkCard,
+        shape = RoundedCornerShape(16.dp)
+    )
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -537,12 +891,57 @@ private fun FinancialGlobalSummarySection(
     debtorStudiosCount: Int,
     totalStudiosCount: Int,
     overdueCount: Int,
-    overdueAmount: Double
+    overdueAmount: Double,
+    selectedPeriod: FinanceTimePeriod = FinanceTimePeriod.ALL_TIME,
+    onPeriodClick: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Active Filter Banner (if not ALL_TIME)
+        if (selectedPeriod != FinanceTimePeriod.ALL_TIME) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onPeriodClick() },
+                shape = RoundedCornerShape(10.dp),
+                color = PrimaryPurple.copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            tint = PrimaryPurple,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "گزارش مالی فیلتر شده: ${selectedPeriod.titleFa} (${selectedPeriod.subtitleFa})",
+                            color = PrimaryPurple,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "تغییر بازه",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
         // Row 1: مجموع مبالغ & مجموع پرداخت‌شده
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -551,16 +950,16 @@ private fun FinancialGlobalSummarySection(
             SummaryMetricCard(
                 title = "مجموع مبالغ",
                 value = PersianUtils.formatCurrencyFa(totalContractAmount),
-                subtitle = "ارزش کل پروژه‌ها",
+                subtitle = if (selectedPeriod == FinanceTimePeriod.ALL_TIME) "ارزش کل پروژه‌ها" else "پروژه‌های این بازه",
                 icon = Icons.Default.Business,
                 accentColor = PrimaryPurple,
                 modifier = Modifier.weight(1f)
             )
 
             SummaryMetricCard(
-                title = "مجموع پرداخت‌شده",
+                title = "مجموع دریافتی",
                 value = PersianUtils.formatCurrencyFa(totalCollected),
-                subtitle = "کل واریزی‌های دریافتی",
+                subtitle = if (selectedPeriod == FinanceTimePeriod.ALL_TIME) "کل واریزی‌های دریافتی" else "واریزی‌های این بازه",
                 icon = Icons.Default.AccountBalanceWallet,
                 accentColor = SuccessGreen,
                 modifier = Modifier.weight(1f)
@@ -573,9 +972,9 @@ private fun FinancialGlobalSummarySection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             SummaryMetricCard(
-                title = "مجموع بدهی",
+                title = "مانده بدهی",
                 value = PersianUtils.formatCurrencyFa(totalMarketDebt),
-                subtitle = "مانده مطالبات بازار",
+                subtitle = "مانده مطالبات",
                 icon = Icons.Default.AttachMoney,
                 accentColor = if (totalMarketDebt > 0) WarningAmber else SuccessGreen,
                 modifier = Modifier.weight(1f)
