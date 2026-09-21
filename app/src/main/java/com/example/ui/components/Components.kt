@@ -135,7 +135,7 @@ fun KpiCard(
 fun StatusBadge(
     text: String,
     backgroundColor: Color,
-    textColor: Color = Color.White
+    textColor: Color = backgroundColor
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -143,7 +143,7 @@ fun StatusBadge(
         border = androidx.compose.foundation.BorderStroke(1.dp, backgroundColor.copy(alpha = 0.38f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -152,12 +152,13 @@ fun StatusBadge(
                     .clip(CircleShape)
                     .background(backgroundColor)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = text,
                 color = textColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
             )
         }
     }

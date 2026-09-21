@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -35,20 +36,25 @@ import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,10 +63,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -79,7 +88,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -135,6 +148,8 @@ fun WorkspaceTab(viewModel: MainViewModel) {
     var showPaymentDialog by remember { mutableStateOf(false) }
     var showAddRevisionDialog by remember { mutableStateOf(false) }
     var showAddStudioDialog by remember { mutableStateOf(false) }
+    var statusMenuExpanded by remember { mutableStateOf(false) }
+    var studioMenuExpanded by remember { mutableStateOf(false) }
     var projectToDelete by remember { mutableStateOf<ProjectEntity?>(null) }
     var selectedProjectForReport by remember { mutableStateOf<ProjectEntity?>(null) }
 
@@ -150,9 +165,15 @@ fun WorkspaceTab(viewModel: MainViewModel) {
     // 2. Filter Active Projects by Search, Studio, and Progress Status
     val filteredProjects = allActiveProjects.filter { proj ->
         if (searchQuery.isBlank()) true else {
-            proj.name.contains(searchQuery, ignoreCase = true) ||
-                    proj.studioName.contains(searchQuery, ignoreCase = true) ||
-                    (proj.weddingDate?.contains(searchQuery, ignoreCase = true) == true)
+            val q = searchQuery.trim()
+            val qEn = PersianUtils.convertFaToEnNum(q)
+            proj.name.contains(q, ignoreCase = true) ||
+                    proj.studioName.contains(q, ignoreCase = true) ||
+                    (proj.weddingDate?.contains(q, ignoreCase = true) == true) ||
+                    (proj.weddingDate?.let { PersianUtils.convertFaToEnNum(it).contains(qEn) } == true) ||
+                    proj.projectCode.contains(qEn, ignoreCase = true) ||
+                    PersianUtils.faNum(proj.projectCode).contains(q, ignoreCase = true) ||
+                    (proj.projectCode.split("-").lastOrNull()?.contains(qEn) == true)
         }
     }.filter { proj ->
         if (studioFilter == null) true else proj.studioName == studioFilter
@@ -385,49 +406,7 @@ fun WorkspaceTab(viewModel: MainViewModel) {
         }
 
         // ==========================================
-        // 3. QUICK NAVIGATION HUB (مسیرهای دسترسی سریع)
-        // ==========================================
-        Text(
-            text = "دسترسی سریع به بخش‌ها",
-            fontWeight = FontWeight.Bold,
-            color = TextSecondary,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            QuickNavigationItem(
-                modifier = Modifier.weight(1f),
-                title = "حسابرسی و مالی",
-                icon = Icons.Default.AccountBalanceWallet,
-                accentColor = WarningAmber,
-                onClick = { viewModel.setSelectedTab(2) }
-            )
-
-            QuickNavigationItem(
-                modifier = Modifier.weight(1f),
-                title = "بایگانی و آرشیو",
-                icon = Icons.Default.Inventory2,
-                accentColor = SuccessGreen,
-                onClick = { viewModel.setSelectedTab(1) }
-            )
-
-            QuickNavigationItem(
-                modifier = Modifier.weight(1f),
-                title = "زمان‌سنج کار",
-                icon = Icons.Default.Timer,
-                accentColor = MediaAccentCyan,
-                onClick = { viewModel.setSelectedTab(3) }
-            )
-        }
-
-        // ==========================================
-        // 4. ACTIVE PROJECTS SECTION & FILTERS
+        // ACTIVE PROJECTS SECTION & FILTERS
         // ==========================================
         Row(
             modifier = Modifier
@@ -492,46 +471,273 @@ fun WorkspaceTab(viewModel: MainViewModel) {
             singleLine = true
         )
 
-        // Status Filter Chips
+        // ==========================================
+        // 3. ELEGANT SIDE-BY-SIDE FILTER CAPSULES WITH POPUPS
+        // ==========================================
+        val isStatusFilterActive = statusFilter != "ALL"
+        val isStudioFilterActive = studioFilter != null
+        val isAnyFilterActive = isStatusFilterActive || isStudioFilterActive || searchQuery.isNotBlank()
+
+        val currentStatusLabel = when (statusFilter) {
+            "EDITING" -> "در حال تدوین"
+            "REVISION" -> "اصلاحات"
+            "NEAR_DONE" -> "آماده تحویل"
+            else -> "همه وضعیت‌ها"
+        }
+        val currentStudioLabel = if (studioFilter != null) PersianUtils.formatStudioName(studioFilter!!) else "همه آتلیه‌ها"
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(bottom = if (isAnyFilterActive) 6.dp else 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val filterOptions = listOf(
-                "ALL" to "همه",
-                "EDITING" to "در حال تدوین",
-                "REVISION" to "اصلاحات",
-                "NEAR_DONE" to "تحویل"
-            )
-            filterOptions.forEach { (key, label) ->
-                val isSelected = statusFilter == key
-                ChipSelectable(
-                    text = label,
-                    isSelected = isSelected,
-                    onSelect = { viewModel.workspaceStatusFilter.value = key },
-                    modifier = Modifier.weight(1f)
-                )
+            // Capsule 1: Status Filter Popup
+            Box(modifier = Modifier.weight(1f)) {
+                Surface(
+                    onClick = { statusMenuExpanded = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isStatusFilterActive) PrimaryPurple.copy(alpha = 0.15f) else DarkInputBg,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isStatusFilterActive) PrimaryPurple.copy(alpha = 0.6f) else BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = null,
+                                tint = if (isStatusFilterActive) PrimaryPurple else TextSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = currentStatusLabel,
+                                color = if (isStatusFilterActive) PrimaryPurple else TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = if (isStatusFilterActive) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = if (statusMenuExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = if (isStatusFilterActive) PrimaryPurple else TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = statusMenuExpanded,
+                    onDismissRequest = { statusMenuExpanded = false },
+                    modifier = Modifier.background(DarkCard)
+                ) {
+                    val statusOptions = listOf(
+                        "ALL" to "همه وضعیت‌ها",
+                        "EDITING" to "در حال تدوین",
+                        "REVISION" to "اصلاحات",
+                        "NEAR_DONE" to "آماده تحویل"
+                    )
+                    statusOptions.forEach { (key, label) ->
+                        val isSelected = statusFilter == key
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) PrimaryPurple else TextPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 12.5.sp
+                                    )
+                                    if (isSelected) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = PrimaryPurple,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                viewModel.workspaceStatusFilter.value = key
+                                statusMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Capsule 2: Studio Filter Popup
+            Box(modifier = Modifier.weight(1f)) {
+                Surface(
+                    onClick = { studioMenuExpanded = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isStudioFilterActive) PrimaryPurple.copy(alpha = 0.15f) else DarkInputBg,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (isStudioFilterActive) PrimaryPurple.copy(alpha = 0.6f) else BorderDark
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Store,
+                                contentDescription = null,
+                                tint = if (isStudioFilterActive) PrimaryPurple else TextSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = currentStudioLabel,
+                                color = if (isStudioFilterActive) PrimaryPurple else TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = if (isStudioFilterActive) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = if (studioMenuExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                            contentDescription = null,
+                            tint = if (isStudioFilterActive) PrimaryPurple else TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = studioMenuExpanded,
+                    onDismissRequest = { studioMenuExpanded = false },
+                    modifier = Modifier.background(DarkCard)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "همه آتلیه‌ها",
+                                    color = if (studioFilter == null) PrimaryPurple else TextPrimary,
+                                    fontWeight = if (studioFilter == null) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.5.sp
+                                )
+                                if (studioFilter == null) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = PrimaryPurple,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            viewModel.workspaceStudioFilter.value = null
+                            studioMenuExpanded = false
+                        }
+                    )
+                    studios.forEach { studio ->
+                        val isSelected = studioFilter == studio.name
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = PersianUtils.formatStudioName(studio.name),
+                                        color = if (isSelected) PrimaryPurple else TextPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 12.5.sp
+                                    )
+                                    if (isSelected) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = PrimaryPurple,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                viewModel.workspaceStudioFilter.value = studio.name
+                                studioMenuExpanded = false
+                            }
+                        )
+                    }
+                }
             }
         }
 
-        // Studio Filter Capsules
-        val allStudioNames = listOf("همه آتلیه‌ها") + studios.map { it.name }
-        ResponsiveCapsuleGrid(
-            items = allStudioNames,
-            maxPerRow = 3,
-            modifier = Modifier.padding(bottom = 14.dp)
-        ) { studioName, modifier ->
-            val isSelected = if (studioName == "همه آتلیه‌ها") studioFilter == null else studioFilter == studioName
-            ChipSelectable(
-                text = studioName,
-                isSelected = isSelected,
-                onSelect = {
-                    viewModel.workspaceStudioFilter.value = if (studioName == "همه آتلیه‌ها") null else studioName
-                },
-                modifier = modifier
-            )
+        // Quick Reset Row (Shown only when any filter is active)
+        if (isAnyFilterActive) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Surface(
+                    onClick = {
+                        viewModel.workspaceSearch.value = ""
+                        viewModel.workspaceStatusFilter.value = "ALL"
+                        viewModel.workspaceStudioFilter.value = null
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Transparent
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "پاک کردن فیلترها",
+                            tint = WarningAmber,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "حذف فیلترها",
+                            color = WarningAmber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
         }
 
         // Project Cards List
@@ -893,6 +1099,7 @@ fun QuickNavigationItem(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProjectRowCard(
     project: ProjectEntity,
@@ -905,6 +1112,7 @@ fun ProjectRowCard(
     onDelete: () -> Unit
 ) {
     val remainingDebt = (project.price - paidAmount).coerceAtLeast(0.0)
+    val isSettled = project.isSettled == 1 || remainingDebt <= 0.0
 
     val (statusLabel, statusColor) = when {
         project.status == "REVISION" -> Pair("اصلاحات درخواستی", WarningAmber)
@@ -921,161 +1129,348 @@ fun ProjectRowCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark)
+        border = BorderStroke(1.dp, BorderDark.copy(alpha = 0.9f))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(15.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Top Row: Project Name, Studio Badge & Status Badge
+            // ==========================================
+            // ۱. نوار شناسه و وضعیت (تفکیک متقارن بالا)
+            // ==========================================
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // شناسه یکتای پروژه با نشان اختصاصی
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(PrimaryPurple.copy(alpha = 0.15f)),
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(PrimaryPurple.copy(alpha = 0.12f))
+                            .border(0.8.dp, PrimaryPurple.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.FolderOpen,
                             contentDescription = null,
                             tint = PrimaryPurple,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = project.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            fontSize = 15.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    if (project.projectCode.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = PrimaryPurple.copy(alpha = 0.12f),
+                            border = BorderStroke(0.8.dp, PrimaryPurple.copy(alpha = 0.35f))
+                        ) {
                             Text(
-                                text = PersianUtils.formatStudioName(project.studioName),
-                                color = TextSecondary,
-                                fontSize = 11.sp
+                                text = PersianUtils.faNum(project.projectCode),
+                                color = PrimaryPurple,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
                             )
-                            if (!project.weddingDate.isNullOrBlank()) {
-                                Text(
-                                    text = " • 💍 ${PersianUtils.faNum(project.weddingDate)}",
-                                    color = PrimaryPurple,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
                         }
+                    } else {
+                        Text(
+                            text = "پروژه #${PersianUtils.faNum(project.id)}",
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
 
+                // برچسب وضعیت پروژه
                 StatusBadge(text = statusLabel, backgroundColor = statusColor)
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Middle: Financial Summary Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(DarkInputBg)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("مبلغ کل", color = TextMuted, fontSize = 9.sp)
-                    Text(
-                        text = PersianUtils.formatCurrencyFa(project.price),
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Column {
-                    Text("دریافتی", color = TextMuted, fontSize = 9.sp)
-                    Text(
-                        text = PersianUtils.formatCurrencyFa(paidAmount),
-                        color = SuccessGreen,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Column {
-                    Text("مانده طلب", color = TextMuted, fontSize = 9.sp)
-                    Text(
-                        text = if (remainingDebt <= 0.0) "تسویه شد" else PersianUtils.formatCurrencyFa(remainingDebt),
-                        color = if (remainingDebt <= 0.0) SuccessGreen else WarningAmber,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Progress Indicators
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "وضعیت کلیپ‌ها: ${PersianUtils.faNum(doneClips)} از ${PersianUtils.faNum(totalClips)} تکمیل شده",
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
-                Text(
-                    text = "${PersianUtils.faNum((progressPct * 100).toInt())}٪",
-                    color = if (progressPct >= 0.8f) SuccessGreen else PrimaryPurple,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { progressPct },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = if (progressPct >= 0.8f) SuccessGreen else PrimaryPurple,
-                trackColor = DarkInputBg
+            // ==========================================
+            // ۲. نام پروژه (عروس و داماد) - با فضای کامل و بدون شکستگی یا برش
+            // ==========================================
+            Text(
+                text = project.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                fontSize = 16.sp,
+                lineHeight = 23.sp
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            // ==========================================
+            // ۳. مشخصات آتلیه و تاریخ مراسم (منعطف و کامل)
+            // ==========================================
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // نام کامل آتلیه / کارفرما
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 1.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Store,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = PersianUtils.formatStudioName(project.studioName),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
-            // Bottom Actions: Enter Clips Button & Delete Icon
+                // تاریخ مراسم (در صورت ثبت)
+                if (!project.weddingDate.isNullOrBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 1.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = PrimaryPurple,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "مراسم: ${PersianUtils.faNum(project.weddingDate)}",
+                            color = PrimaryPurple,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // ۴. نوار موعد تحویل (ددلاین) در صورت وجود
+            // ==========================================
+            if (!project.deadlineDate.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = DarkInputBg,
+                    border = BorderStroke(0.7.dp, BorderDark.copy(alpha = 0.7f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Event,
+                                contentDescription = null,
+                                tint = PrimaryPurple,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "موعد تحویل پروژه (ددلاین):",
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Text(
+                            text = PersianUtils.faNum(project.deadlineDate),
+                            color = TextPrimary,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // ۵. شاخص‌های مالی استاندارد (۳ ستون منظم)
+            // ==========================================
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = DarkInputBg,
+                border = BorderStroke(0.8.dp, BorderDark.copy(alpha = 0.8f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // ستون ۱: مبلغ کل قرارداد
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "مبلغ قرارداد",
+                            color = TextMuted,
+                            fontSize = 9.5.sp,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = PersianUtils.formatCurrencyFa(project.price),
+                            color = TextPrimary,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // خط جداکننده ستون ۱ و ۲
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(BorderDark.copy(alpha = 0.7f))
+                    )
+
+                    // ستون ۲: دریافتی کل
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "دریافتی کل",
+                            color = TextMuted,
+                            fontSize = 9.5.sp,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = PersianUtils.formatCurrencyFa(paidAmount),
+                            color = SuccessGreen,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // خط جداکننده ستون ۲ و ۳
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(BorderDark.copy(alpha = 0.7f))
+                    )
+
+                    // ستون ۳: وضعیت مانده یا تسویه
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = if (isSettled) "وضعیت حساب" else "مانده بدهی",
+                            color = TextMuted,
+                            fontSize = 9.5.sp,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isSettled) "تسویه شده" else PersianUtils.formatCurrencyFa(remainingDebt),
+                            color = if (isSettled) SuccessGreen else WarningAmber,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // ۴. نوار وضعیت پیشرفت تدوین کلیپ‌ها
+            // ==========================================
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Movie,
+                            contentDescription = null,
+                            tint = MediaAccentCyan,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "پیشرفت تدوین کلیپ‌ها",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                    }
+
+                    Text(
+                        text = "${PersianUtils.faNum(doneClips)} از ${PersianUtils.faNum(totalClips)} کلیپ • ${PersianUtils.faNum((progressPct * 100).toInt())}٪",
+                        color = if (progressPct >= 0.8f) SuccessGreen else PrimaryPurple,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+
+                LinearProgressIndicator(
+                    progress = { progressPct },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = if (progressPct >= 0.8f) SuccessGreen else PrimaryPurple,
+                    trackColor = DarkSurface
+                )
+            }
+
+            // ==========================================
+            // ۵. نوار عملیات پایین کارت (دکمه ورود و دکمه حذف)
+            // ==========================================
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
+                OutlinedButton(
                     onClick = onClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple.copy(alpha = 0.15f)),
                     shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.4f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = PrimaryPurple.copy(alpha = 0.10f),
+                        contentColor = PrimaryPurple
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "مدیریت کلیپ‌ها و جزئیات",
+                        text = "ورود به پرونده و کلیپ‌ها",
                         color = PrimaryPurple,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
@@ -1088,12 +1483,16 @@ fun ProjectRowCard(
 
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DarkSurface)
+                        .border(0.8.dp, BorderDark, RoundedCornerShape(8.dp))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "حذف پروژه",
-                        tint = ErrorRed.copy(alpha = 0.75f),
+                        tint = ErrorRed.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -1122,6 +1521,8 @@ fun ProjectDetailView(
     onMarkRoundComplete: (Int) -> Unit = {},
     onViewReport: () -> Unit = {}
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val remainingDebt = (project.price - paidAmount).coerceAtLeast(0.0)
     val isSettled = project.isSettled == 1 || remainingDebt <= 0.0
     val doneCount = clips.count { it.isDone == 1 }
@@ -1194,22 +1595,30 @@ fun ProjectDetailView(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(
                     onClick = onEditProject,
-                    modifier = Modifier.size(36.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = DarkCard, contentColor = PrimaryPurple),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "ویرایش پروژه",
                         tint = PrimaryPurple,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(15.dp)
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("ویرایش پروژه", color = PrimaryPurple, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.width(4.dp))
+
                 IconButton(
                     onClick = onDeleteProject,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DarkCard)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -1221,7 +1630,7 @@ fun ProjectDetailView(
             }
         }
 
-        // Project Identity Banner (Header ساده، خلوت و خوانا)
+        // Project Identity Banner (Header ساده، خلوت و خوانا با شماره دائمی پروژه)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -1231,7 +1640,8 @@ fun ProjectDetailView(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1274,18 +1684,65 @@ fun ProjectDetailView(
                                     fontSize = 11.sp
                                 )
                             }
-                            Text(text = "•", color = TextMuted, fontSize = 11.sp)
-                            Text(
-                                text = "#${PersianUtils.faNum(project.id)}",
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
                         }
                     }
 
                     // Single clean Status Badge
                     StatusBadge(text = statusText, backgroundColor = statusColor)
+                }
+
+                // Project ID Permanent Chip with Copy Action
+                if (project.projectCode.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = PrimaryPurple.copy(alpha = 0.08f),
+                        border = BorderStroke(0.9.dp, PrimaryPurple.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                clipboardManager.setText(AnnotatedString(project.projectCode))
+                                Toast.makeText(context, "شماره پروژه (${project.projectCode}) کپی شد", Toast.LENGTH_SHORT).show()
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "شماره یکتای پروژه:",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = PersianUtils.faNum(project.projectCode),
+                                    color = PrimaryPurple,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "کپی شماره پروژه",
+                                    tint = PrimaryPurple,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "کپی",
+                                    color = PrimaryPurple,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2767,27 +3224,76 @@ fun EditProjectDialog(
     var studio by remember { mutableStateOf(project.studioName) }
     var priceText by remember { mutableStateOf(project.price.toLong().toString()) }
     var weddingDate by remember { mutableStateOf<String?>(project.weddingDate) }
+    var deadlineDate by remember { mutableStateOf(project.deadlineDate) }
     var showWeddingDatePicker by remember { mutableStateOf(false) }
+    var showDeadlineDatePicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.fillMaxWidth(0.80f),
-        title = { Text("ویرایش اطلاعات پروژه", color = TextPrimary, fontWeight = FontWeight.Bold) },
+        modifier = Modifier.fillMaxWidth(0.85f),
+        title = {
+            Text("ویرایش اطلاعات پروژه", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Read-Only Project Code Banner
+                if (project.projectCode.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = PrimaryPurple.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = PrimaryPurple,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "شماره یکتای پروژه (دائمی)",
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = PersianUtils.faNum(project.projectCode),
+                                        color = PrimaryPurple,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "ثابت 🔒",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
                 // 1. Title
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("عنوان پروژه") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = PrimaryPurple,
                         focusedTextColor = TextPrimary,
@@ -2795,13 +3301,11 @@ fun EditProjectDialog(
                     )
                 )
 
-                // 2. Wedding Date (placed immediately below Title)
-                Spacer(modifier = Modifier.height(6.dp))
+                // 2. Wedding Date
                 WeddingDateField(
                     value = weddingDate,
                     onClick = { showWeddingDatePicker = true },
-                    onClear = { weddingDate = null },
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    onClear = { weddingDate = null }
                 )
 
                 if (showWeddingDatePicker) {
@@ -2815,22 +3319,83 @@ fun EditProjectDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("آتلیه / کارفرما:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-                ResponsiveCapsuleGrid(
-                    items = studios,
-                    maxPerRow = 3
-                ) { s, modifier ->
-                    ChipSelectable(
-                        text = s,
-                        isSelected = studio == s,
-                        onSelect = { studio = s },
-                        modifier = modifier
+                // 3. Deadline Date Field
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = DarkInputBg,
+                    border = BorderStroke(1.dp, BorderDark),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showDeadlineDatePicker = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Event,
+                                contentDescription = null,
+                                tint = PrimaryPurple,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "موعد تحویل (ددلاین):",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    text = PersianUtils.faNum(deadlineDate),
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Text(
+                            text = "تغییر تاریخ",
+                            color = PrimaryPurple,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                if (showDeadlineDatePicker) {
+                    PersianDatePickerDialog(
+                        initialDate = deadlineDate,
+                        onDismiss = { showDeadlineDatePicker = false },
+                        onDateConfirm = { selected ->
+                            deadlineDate = selected
+                            showDeadlineDatePicker = false
+                        }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // 4. Studio
+                Column {
+                    Text("آتلیه / کارفرما:", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    ResponsiveCapsuleGrid(
+                        items = studios,
+                        maxPerRow = 3
+                    ) { s, modifier ->
+                        ChipSelectable(
+                            text = s,
+                            isSelected = studio == s,
+                            onSelect = { studio = s },
+                            modifier = modifier
+                        )
+                    }
+                }
+
+                // 5. Price
                 OutlinedTextField(
                     value = priceText,
                     onValueChange = { input ->
@@ -2840,9 +3405,7 @@ fun EditProjectDialog(
                     label = { Text("مبلغ قرارداد (تومان)") },
                     singleLine = true,
                     visualTransformation = PersianNumberVisualTransformation(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = PrimaryPurple,
                         focusedTextColor = TextPrimary,
@@ -2852,7 +3415,6 @@ fun EditProjectDialog(
 
                 val editAmountLong = priceText.toLongOrNull() ?: 0L
                 if (editAmountLong > 0L) {
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "به حروف: ${PersianUtils.numberToWordsFa(editAmountLong, "تومان")}",
                         color = PrimaryPurple,
@@ -2871,7 +3433,8 @@ fun EditProjectDialog(
                             name = title,
                             studioName = studio,
                             price = p,
-                            weddingDate = weddingDate
+                            weddingDate = weddingDate,
+                            deadlineDate = deadlineDate
                         ))
                     }
                 },

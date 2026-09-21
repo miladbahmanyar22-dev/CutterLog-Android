@@ -59,6 +59,7 @@ import java.util.Calendar
 @Composable
 fun CutterLogTopHeader(
     onSettingsClick: () -> Unit,
+    isSettingsSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Curated collection of short, professional, and inspiring quotes for video editors
@@ -169,7 +170,7 @@ fun CutterLogTopHeader(
                         .size(44.dp)
                         .testTag("header_settings_button"),
                     colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = TextSecondary
+                        contentColor = if (isSettingsSelected) PrimaryPurple else TextSecondary
                     )
                 ) {
                     Icon(

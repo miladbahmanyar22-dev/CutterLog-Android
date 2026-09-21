@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.migration.Migration
 import com.example.data.dao.AppConfigDao
 import com.example.data.dao.DefaultClipDao
 import com.example.data.dao.PaymentDao
@@ -36,7 +37,7 @@ import kotlinx.coroutines.launch
         TimerSessionEntity::class,
         AppConfigEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,6 +55,28 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Version 1 to 2 migrations if any
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN project_code TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE app_config ADD COLUMN last_project_code_sequences TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_projects_project_code ON projects(project_code)")
+            }
+        }
+
+        val MIGRATION_1_3 = object : Migration(1, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN project_code TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE app_config ADD COLUMN last_project_code_sequences TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_projects_project_code ON projects(project_code)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -61,6 +84,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "cutterlog_pro.db"
                 )
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3)
                 .addCallback(DatabaseCallback())
                 .fallbackToDestructiveMigration(true)
                 .build()

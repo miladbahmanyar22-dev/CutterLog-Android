@@ -32,6 +32,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val db = AppDatabase.getDatabase(application)
         repository = CutterLogRepository(db)
+        viewModelScope.launch {
+            repository.ensureProjectCodesMigrated()
+        }
     }
 
     // Active Navigation Tab Index (0: Workspace, 1: Archive, 2: Finance, 3: Timer, 4: Pilot AI, 5: Settings)

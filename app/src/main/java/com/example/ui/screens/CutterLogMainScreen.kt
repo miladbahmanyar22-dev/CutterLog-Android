@@ -28,12 +28,13 @@ fun CutterLogMainScreen(viewModel: MainViewModel) {
                 CutterLogTopHeader(
                     onSettingsClick = { 
                         viewModel.setSelectedTab(5)
-                    }
+                    },
+                    isSettingsSelected = (selectedTab == 5)
                 )
             },
             bottomBar = {
                 Modern3DBottomNavigation(
-                    selectedTab = if (selectedTab == 5) 0 else selectedTab,
+                    selectedTab = selectedTab,
                     onTabSelected = { tab ->
                         viewModel.setSelectedTab(tab)
                     }

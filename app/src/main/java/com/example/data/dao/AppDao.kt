@@ -63,6 +63,9 @@ interface ProjectDao {
     @Query("SELECT * FROM projects WHERE id = :id LIMIT 1")
     suspend fun getProjectById(id: Int): ProjectEntity?
 
+    @Query("SELECT * FROM projects WHERE project_code = :code LIMIT 1")
+    suspend fun getProjectByCode(code: String): ProjectEntity?
+
     @Query("SELECT * FROM projects WHERE studio_name = :studioName ORDER BY id ASC")
     suspend fun getProjectsByStudioSync(studioName: String): List<ProjectEntity>
 

@@ -24,9 +24,13 @@ data class DefaultClipEntity(
     val name: String
 )
 
-@Entity(tableName = "projects")
+@Entity(
+    tableName = "projects",
+    indices = [Index(value = ["project_code"], unique = true)]
+)
 data class ProjectEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @ColumnInfo(name = "project_code") val projectCode: String = "",
     val name: String,
     @ColumnInfo(name = "studio_name") val studioName: String,
     val price: Double = 0.0,
@@ -139,5 +143,6 @@ data class AppConfigEntity(
     @ColumnInfo(name = "invoice_signature_path") val invoiceSignaturePath: String = "",
     @ColumnInfo(name = "invoice_footer_note") val invoiceFooterNote: String = "با تشکر از همکاری شما. تسویه حساب طبق قرارداد الزامی است.",
     @ColumnInfo(name = "quick_prices") val quickPricesJson: String = "[500000, 1000000, 2000000, 3000000, 5000000, 10000000]",
-    @ColumnInfo(name = "packages_json") val packagesJson: String = "[{\"name\":\"پکیج کامل\",\"clips\":[\"کلیپ اصلی\",\"کلیپ فرمالیته\",\"تیزر اینستاگرام\"]},{\"name\":\"پکیج اقتصادی\",\"clips\":[\"کلیپ اصلی\",\"تیزر اینستاگرام\"]}]"
+    @ColumnInfo(name = "packages_json") val packagesJson: String = "[{\"name\":\"پکیج کامل\",\"clips\":[\"کلیپ اصلی\",\"کلیپ فرمالیته\",\"تیزر اینستاگرام\"]},{\"name\":\"پکیج اقتصادی\",\"clips\":[\"کلیپ اصلی\",\"تیزر اینستاگرام\"]}]",
+    @ColumnInfo(name = "last_project_code_sequences") val lastProjectCodeSequencesJson: String = "{}"
 )

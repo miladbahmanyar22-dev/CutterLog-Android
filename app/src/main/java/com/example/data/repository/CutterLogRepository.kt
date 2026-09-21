@@ -34,6 +34,79 @@ class CutterLogRepository(private val db: AppDatabase) {
     val allSessionsFlow: Flow<List<TimerSessionEntity>> = db.timerSessionDao().getAllSessions()
     val allRevisionsFlow: Flow<List<ProjectRevisionEntity>> = db.projectRevisionDao().getAllRevisions()
 
+    private fun parseSequenceMap(jsonStr: String?): MutableMap<Int, Int> {
+        val map = mutableMapOf<Int, Int>()
+        if (jsonStr.isNullOrBlank()) return map
+        try {
+            val obj = org.json.JSONObject(jsonStr)
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val year = k.toIntOrNull()
+                if (year != null) {
+                    map[year] = obj.optInt(k, 0)
+                }
+            }
+        } catch (e: Exception) {
+            // fallback
+        }
+        return map
+    }
+
+    private fun serializeSequenceMap(map: Map<Int, Int>): String {
+        val obj = org.json.JSONObject()
+        map.forEach { (year, seq) ->
+            obj.put(year.toString(), seq)
+        }
+        return obj.toString()
+    }
+
+    suspend fun allocateProjectCodeForYear(year: Int): String {
+        val cfg = getConfigSync()
+        val seqMap = parseSequenceMap(cfg.lastProjectCodeSequencesJson)
+        val storedSeq = seqMap[year] ?: 0
+
+        // Scan DB for any existing project codes for this year to guarantee monotonic growth without collision
+        val existingProjects = db.projectDao().getAllProjectsSync()
+        val dbMaxSeq = existingProjects.mapNotNull { p ->
+            val code = p.projectCode
+            val clean = PersianUtils.convertFaToEnNum(code.trim().uppercase())
+            val parts = clean.split("-")
+            if (parts.size == 3 && parts[0] == "CL" && parts[1].toIntOrNull() == year) {
+                parts[2].toIntOrNull()
+            } else null
+        }.maxOrNull() ?: 0
+
+        val maxKnown = maxOf(storedSeq, dbMaxSeq)
+        val nextSeq = maxKnown + 1
+        seqMap[year] = nextSeq
+
+        // Save updated sequence map back to app config
+        val updatedCfg = cfg.copy(lastProjectCodeSequencesJson = serializeSequenceMap(seqMap))
+        db.appConfigDao().saveConfig(updatedCfg)
+
+        return PersianUtils.formatProjectCode(year, nextSeq)
+    }
+
+    suspend fun generateNextProjectCode(creationDate: String? = null): String {
+        val year = PersianUtils.extractJalaliYear(creationDate ?: PersianUtils.getCurrentJalaliDate())
+        return allocateProjectCodeForYear(year)
+    }
+
+    suspend fun ensureProjectCodesMigrated() {
+        val projects = db.projectDao().getAllProjectsSync()
+        val unassigned = projects.filter { it.projectCode.isBlank() }
+        if (unassigned.isEmpty()) return
+
+        // Sort by ID ascending so earlier created projects get earlier sequence numbers
+        val sorted = unassigned.sortedBy { it.id }
+        for (proj in sorted) {
+            val y = PersianUtils.extractJalaliYear(proj.createdAt.ifBlank { proj.weddingDate })
+            val code = allocateProjectCodeForYear(y)
+            db.projectDao().updateProject(proj.copy(projectCode = code))
+        }
+    }
+
     suspend fun createProjectWithClips(
         name: String,
         studioName: String,
@@ -44,7 +117,9 @@ class CutterLogRepository(private val db: AppDatabase) {
     ): Long {
         val createdAt = PersianUtils.getCurrentJalaliDate()
         val deadlineDate = PersianUtils.addDaysToJalali(createdAt, deadlineDays)
+        val projectCode = generateNextProjectCode(createdAt)
         val project = ProjectEntity(
+            projectCode = projectCode,
             name = name,
             studioName = studioName,
             price = price,
@@ -316,6 +391,7 @@ class CutterLogRepository(private val db: AppDatabase) {
         projectList.forEach { pr ->
             projectsArr.put(org.json.JSONObject().apply {
                 put("id", pr.id)
+                put("projectCode", pr.projectCode)
                 put("name", pr.name)
                 put("studioName", pr.studioName)
                 put("price", pr.price)
@@ -422,6 +498,7 @@ class CutterLogRepository(private val db: AppDatabase) {
                     val obj = arr.getJSONObject(i)
                     val proj = ProjectEntity(
                         id = obj.optInt("id", 0),
+                        projectCode = obj.optString("projectCode", ""),
                         name = obj.optString("name", "پروژه"),
                         studioName = obj.optString("studioName", "آتلیه"),
                         price = obj.optDouble("price", 0.0),
@@ -483,6 +560,8 @@ class CutterLogRepository(private val db: AppDatabase) {
                     db.projectRevisionDao().insertRevision(rv)
                 }
             }
+
+            ensureProjectCodesMigrated()
 
             true
         } catch (e: Exception) {

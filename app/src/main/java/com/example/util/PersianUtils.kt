@@ -142,6 +142,49 @@ object PersianUtils {
         return String.format(Locale.US, "%04d/%02d/%02d", jYear, jMonth, jDay)
     }
 
+    /**
+     * Extracts 4-digit Jalali Year (e.g. 1405) from date string (YYYY/MM/DD)
+     */
+    fun extractJalaliYear(dateStr: String?): Int {
+        if (dateStr.isNullOrBlank()) {
+            val cur = getCurrentJalaliDate()
+            return cur.split("/").firstOrNull()?.toIntOrNull() ?: 1405
+        }
+        val clean = convertFaToEnNum(dateStr.trim())
+        val fourDigitMatch = Regex("""\b(13\d{2}|14\d{2})\b""").find(clean)
+        if (fourDigitMatch != null) {
+            return fourDigitMatch.value.toIntOrNull() ?: 1405
+        }
+        val firstPart = clean.split("/", "-", " ", ".").firstOrNull()?.filter { it.isDigit() }
+        val num = firstPart?.toIntOrNull()
+        if (num != null && num in 1300..1500) {
+            return num
+        }
+        val cur = getCurrentJalaliDate()
+        return cur.split("/").firstOrNull()?.toIntOrNull() ?: 1405
+    }
+
+    /**
+     * Format a canonical project code (e.g. "CL-1405-001")
+     */
+    fun formatProjectCode(year: Int, sequence: Int): String {
+        return String.format(Locale.US, "CL-%04d-%03d", year, sequence)
+    }
+
+    /**
+     * Get short sequence display for badges (e.g. "CL-1405-023" -> "#۰۲۳")
+     */
+    fun formatShortProjectCode(code: String): String {
+        if (code.isBlank()) return ""
+        val clean = convertFaToEnNum(code.trim().uppercase())
+        val parts = clean.split("-")
+        return if (parts.size == 3 && parts[0] == "CL") {
+            "#${faNum(parts[2])}"
+        } else {
+            "#${faNum(clean)}"
+        }
+    }
+
     fun addDaysToJalali(jalaliDateStr: String, daysToAdd: Int): String {
         val parts = jalaliDateStr.split("/").mapNotNull { convertFaToEnNum(it).toIntOrNull() }
         if (parts.size != 3) return getCurrentJalaliDate()
@@ -256,5 +299,31 @@ object PersianUtils {
         if (rawName.isNullOrBlank()) return "استودیو عمومی"
         val base = cleanStudioBaseName(rawName)
         return "استودیو $base"
+    }
+
+    val PERSIAN_MONTH_NAMES = listOf(
+        "فروردین", "اردیبهشت", "خرداد",
+        "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر",
+        "دی", "بهمن", "اسفند"
+    )
+
+    fun getPersianMonthName(monthNumber: Int): String {
+        return if (monthNumber in 1..12) PERSIAN_MONTH_NAMES[monthNumber - 1] else "ماه $monthNumber"
+    }
+
+    /**
+     * Parses a Jalali/Persian date string (e.g. "1404/05/12", "۱۴۰۴/۰۵/۱۲", "1404-05-12")
+     * Returns Pair(year, month) or null if unparseable.
+     */
+    fun parseJalaliYearMonth(dateStr: String?): Pair<Int, Int>? {
+        if (dateStr.isNullOrBlank()) return null
+        val normalized = convertFaToEnNum(dateStr).trim()
+        val parts = normalized.split('/', '-', '.', ' ').filter { it.isNotBlank() }
+        if (parts.isEmpty()) return null
+        val y = parts[0].toIntOrNull() ?: return null
+        if (y < 1300 || y > 1500) return null // ensure sane Jalali year
+        val m = if (parts.size >= 2) parts[1].toIntOrNull()?.coerceIn(1, 12) ?: 1 else 1
+        return Pair(y, m)
     }
 }

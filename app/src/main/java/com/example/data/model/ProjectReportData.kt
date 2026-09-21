@@ -24,7 +24,8 @@ data class ProjectReportData(
     val reportDate: String = PersianUtils.getCurrentJalaliDate(),
     val brandTitle: String = "کاترلاگ"
 ) {
-    val reportNumber: String = "REP-${project.id.toString().padStart(4, '0')}"
+    val projectCode: String get() = project.projectCode
+    val reportNumber: String = project.projectCode.ifBlank { "REP-${project.id.toString().padStart(4, '0')}" }
 
     val totalDurationSeconds: Long = sessions.sumOf { it.durationSeconds }
 
