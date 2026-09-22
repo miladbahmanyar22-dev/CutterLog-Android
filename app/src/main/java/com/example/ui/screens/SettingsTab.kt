@@ -112,6 +112,8 @@ import com.example.ui.components.QuickPriceItem
 import com.example.ui.components.ResponsiveCapsuleGrid
 import com.example.ui.components.parseQuickPrices
 import com.example.ui.components.serializeQuickPrices
+import com.example.ui.screens.settings.ResetCenterSection
+import com.example.ui.screens.settings.SafetyAndBackupSection
 import com.example.ui.theme.BorderDark
 import com.example.ui.theme.DarkCard
 import com.example.ui.theme.DarkInputBg
@@ -193,11 +195,6 @@ fun SettingsTab(viewModel: MainViewModel) {
     var studioToDelete by remember { mutableStateOf<StudioEntity?>(null) }
     var clipToEdit by remember { mutableStateOf<DefaultClipEntity?>(null) }
     var clipToDelete by remember { mutableStateOf<DefaultClipEntity?>(null) }
-
-    var showBackupRestoreDialog by remember { mutableStateOf(false) }
-    var restoreJsonText by remember { mutableStateOf("") }
-
-    var resetTypeToConfirm by remember { mutableStateOf<String?>(null) } // "PROJECTS", "FINANCE", "SETTINGS", "BASE", "ALL"
 
     var showAboutAppDialog by remember { mutableStateOf(false) }
     var showDeveloperSupportDialog by remember { mutableStateOf(false) }
@@ -1056,189 +1053,17 @@ fun SettingsTab(viewModel: MainViewModel) {
 
                         // ================= 3: SAFETY & BACKUP =================
                         3 -> {
-                            val context = LocalContext.current
-                            SectionTitleHeader(
-                                title = "ایمنی و پشتیبان‌گیری دیتابیس",
-                                subtitle = "استخراج کامل یا بازیابی تمامی پروژه‌ها، حساب‌ها و تنظیمات به صورت فایل آفلاین JSON",
-                                icon = Icons.Default.Security
+                            SafetyAndBackupSection(
+                                viewModel = viewModel,
+                                config = config
                             )
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            SettingGroupCard(
-                                title = "عملیات پشتیبان‌گیری و بازیابی",
-                                description = "پشتیبان‌گیری منظم باعث حفظ امنیت اطلاعات شما در برابر تغییر یا تعویض دستگاه می‌شود",
-                                icon = Icons.Default.Restore
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Button(
-                                        onClick = {
-                                            viewModel.backupDataToJson { jsonStr ->
-                                                val sendIntent = Intent().apply {
-                                                    action = Intent.ACTION_SEND
-                                                    putExtra(Intent.EXTRA_TEXT, jsonStr)
-                                                    type = "application/json"
-                                                }
-                                                context.startActivity(Intent.createChooser(sendIntent, "اشتراک‌گذاری و ذخیره فایل بک‌آپ کاترلاگ"))
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryPurple),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("خروجی گرفتن از فایل بک‌آپ (Backup JSON)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    Button(
-                                        onClick = { showBackupRestoreDialog = true },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(48.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MediaAccentCyan),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Default.FileDownload, contentDescription = null, tint = DarkSurface, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("بازیابی بک‌آپ (Restore JSON)", color = DarkSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Database Status Info Card
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = DarkSurface,
-                                modifier = Modifier.fillMaxWidth(),
-                                border = BorderStroke(1.dp, BorderDark)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .background(SuccessGreen.copy(alpha = 0.12f), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = SuccessGreen,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(14.dp))
-                                    Column {
-                                        Text("وضعیت پایگاه داده: آماده و آفلاین", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text("نام فایل ذخیره‌سازی محلی SQLite: cutterlog_pro.db", color = TextMuted, fontSize = 11.sp)
-                                    }
-                                }
-                            }
                         }
 
                         // ================= 4: RESET CENTER =================
                         4 -> {
-                            SectionTitleHeader(
-                                title = "مرکز بازنشانی و پاک‌سازی تفکیک‌شده",
-                                subtitle = "امکان بازنشانی هدفمند هر بخش از نرم‌افزار بدون آسیب به سایر اطلاعات",
-                                icon = Icons.Default.Warning,
-                                accentColor = ErrorRed
+                            ResetCenterSection(
+                                viewModel = viewModel
                             )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = ErrorRed.copy(alpha = 0.08f),
-                                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "توجه: عملیات پاک‌سازی غیرقابل بازگشت هستند. در صورت لزوم ابتدا از بخش ایمنی فایل بک‌آپ تهیه کنید.",
-                                        color = ErrorRed,
-                                        fontSize = 11.5.sp,
-                                        lineHeight = 18.sp
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(18.dp))
-
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                // 1. Reset Projects
-                                ResetActionButton(
-                                    title = "۱. پاک‌سازی پروژه‌ها و کارکرد",
-                                    subtitle = "حذف تمام پروژه‌ها، کلیپ‌ها، اصلاحات و جلسات تایمر",
-                                    onClick = { resetTypeToConfirm = "PROJECTS" }
-                                )
-
-                                // 2. Reset Finance
-                                ResetActionButton(
-                                    title = "۲. پاک‌سازی سوابق مالی و دریافتی‌ها",
-                                    subtitle = "تصفیه تمام تراکنش‌های ثبت‌شده و واریزی‌های استودیوها",
-                                    onClick = { resetTypeToConfirm = "FINANCE" }
-                                )
-
-                                // 3. Reset Settings
-                                ResetActionButton(
-                                    title = "۳. بازنشانی تنظیمات به پیش‌فرض",
-                                    subtitle = "برگشت برندینگ، متن فاکتور، قیمت‌های سریع و هدف روزانه به حالت اولیه",
-                                    onClick = { resetTypeToConfirm = "SETTINGS" }
-                                )
-
-                                // 4. Reset Base Data
-                                ResetActionButton(
-                                    title = "۴. حذف آتلیه‌ها و کلیپ‌های مرجع پایه",
-                                    subtitle = "پاک‌سازی فهرست اسامی استودیوها و لیست پیش‌فرض عناوین کلیپ‌ها",
-                                    onClick = { resetTypeToConfirm = "BASE" }
-                                )
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // 5. Hard Reset All
-                                Surface(
-                                    onClick = { resetTypeToConfirm = "ALL" },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = ErrorRed,
-                                    shadowElevation = 4.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            "۵. بازنشانی کلی و خام‌سازی کامل نرم‌افزار (Hard Reset)",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.5.sp
-                                        )
-                                    }
-                                }
-                            }
                         }
 
                         // ================= 5: ABOUT CATALOG =================
@@ -1515,131 +1340,7 @@ fun SettingsTab(viewModel: MainViewModel) {
         )
     }
 
-    // 5. BACKUP RESTORE DIALOG
-    if (showBackupRestoreDialog) {
-        AlertDialog(
-            onDismissRequest = { showBackupRestoreDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier.fillMaxWidth(0.80f),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.FileDownload, contentDescription = null, tint = MediaAccentCyan, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("بازیابی اطلاعات از متن JSON", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            },
-            text = {
-                Column {
-                    Text("متن بک‌آپ JSON را در کادر زیر جای‌گذاری کنید:", color = TextSecondary, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = restoreJsonText,
-                        onValueChange = { restoreJsonText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(140.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        placeholder = { Text("محتوای فایل JSON...", color = TextMuted, fontSize = 11.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = DarkInputBg,
-                            unfocusedContainerColor = DarkInputBg,
-                            focusedBorderColor = MediaAccentCyan,
-                            unfocusedBorderColor = BorderDark,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (restoreJsonText.isNotBlank()) {
-                            viewModel.restoreDataFromJson(restoreJsonText) { success ->
-                                if (success) {
-                                    showBackupRestoreDialog = false
-                                    restoreJsonText = ""
-                                }
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MediaAccentCyan),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("شروع بازیابی داده‌ها", color = DarkSurface, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showBackupRestoreDialog = false }) {
-                    Text("انصراف", color = TextMuted)
-                }
-            },
-            containerColor = DarkCard,
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-
-    // 6. GRANULAR RESET CONFIRMATION DIALOG
-    if (resetTypeToConfirm != null) {
-        val type = resetTypeToConfirm!!
-        val titleText = when (type) {
-            "PROJECTS" -> "پاک‌سازی پروژه‌ها و کارکرد"
-            "FINANCE" -> "پاک‌سازی سوابق مالی"
-            "SETTINGS" -> "بازنشانی تنظیمات"
-            "BASE" -> "حذف آتلیه‌ها و کلیپ‌های مرجع"
-            else -> "خام‌سازی کامل نرم‌افزار"
-        }
-        val msgText = when (type) {
-            "PROJECTS" -> "آیا از حذف تمام پروژه‌ها، کلیپ‌ها، اصلاحات و سوابق تایمر اطمینان دارید؟"
-            "FINANCE" -> "آیا از حذف تمام سوابق دریافتی‌ها و تسویه‌حساب‌های مالی اطمینان دارید؟"
-            "SETTINGS" -> "آیا از بازنشانی تنظیمات عمومی، برندینگ و پکیج‌ها به حالت اولیه اطمینان دارید؟"
-            "BASE" -> "آیا از حذف تمام آتلیه‌ها و کلیپ‌های مرجع پایه اطمینان دارید؟"
-            else -> "تمام پروژه‌ها، سوابق مالی، تایمرها و تنظیمات پاک شده و دیتابیس کاملاً خام خواهد شد."
-        }
-
-        AlertDialog(
-            onDismissRequest = { resetTypeToConfirm = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier.fillMaxWidth(0.80f),
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(22.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(titleText, color = ErrorRed, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-            },
-            text = {
-                Text(msgText, color = TextPrimary, fontSize = 13.sp, lineHeight = 20.sp)
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        when (type) {
-                            "PROJECTS" -> viewModel.resetProjectsOnly()
-                            "FINANCE" -> viewModel.resetFinanceOnly()
-                            "SETTINGS" -> viewModel.resetSettingsOnly()
-                            "BASE" -> viewModel.resetBaseDataOnly()
-                            else -> viewModel.resetData()
-                        }
-                        resetTypeToConfirm = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("تأیید و اجرای پاک‌سازی", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetTypeToConfirm = null }) {
-                    Text("انصراف", color = TextMuted)
-                }
-            },
-            containerColor = DarkCard,
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-
-    // 6. ABOUT APP COMPREHENSIVE DIALOG
+    // 5. ABOUT APP COMPREHENSIVE DIALOG
     if (showAboutAppDialog) {
         AboutAppDialog(
             onDismissRequest = { showAboutAppDialog = false }

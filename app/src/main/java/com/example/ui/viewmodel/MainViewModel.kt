@@ -14,6 +14,11 @@ import com.example.data.entity.ProjectEntity
 import com.example.data.entity.ProjectRevisionEntity
 import com.example.data.entity.StudioEntity
 import com.example.data.entity.TimerSessionEntity
+import com.example.data.model.BackupMetadata
+import com.example.data.model.BackupValidationResult
+import com.example.data.model.LocalBackupSnapshot
+import com.example.data.model.ResetExecutionResult
+import com.example.data.model.RestoreExecutionResult
 import com.example.data.repository.CutterLogRepository
 import com.example.util.PersianUtils
 import kotlinx.coroutines.Job
@@ -34,6 +39,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository = CutterLogRepository(db)
         viewModelScope.launch {
             repository.ensureProjectCodesMigrated()
+            loadLocalSnapshots()
         }
     }
 
@@ -77,6 +83,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val appConfig: StateFlow<AppConfigEntity?> = repository.appConfigFlow.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null
     )
+
+    // Local Snapshots State
+    private val _localSnapshots = MutableStateFlow<List<LocalBackupSnapshot>>(emptyList())
+    val localSnapshots: StateFlow<List<LocalBackupSnapshot>> = _localSnapshots.asStateFlow()
+
+    // Last Operation Feedback State
+    private val _lastResetResult = MutableStateFlow<ResetExecutionResult?>(null)
+    val lastResetResult: StateFlow<ResetExecutionResult?> = _lastResetResult.asStateFlow()
+
+    fun clearResetResult() {
+        _lastResetResult.value = null
+    }
 
     // Workspace State
     val workspaceSearch = MutableStateFlow("")
@@ -458,37 +476,104 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.saveConfig(config) }
     }
 
-    fun backupDataToJson(onResult: (String) -> Unit) {
+    // =============================================================================================
+    // BACKUP & RESTORE VIEWMODEL APIS
+    // =============================================================================================
+
+    fun loadLocalSnapshots() {
         viewModelScope.launch {
-            val json = repository.backupDataToJson()
-            onResult(json)
+            val list = repository.getLocalBackupSnapshots(getApplication())
+            _localSnapshots.value = list
         }
     }
 
-    fun restoreDataFromJson(jsonStr: String, onResult: (Boolean) -> Unit) {
+    fun createLocalSnapshot(isSafety: Boolean = false, onResult: (LocalBackupSnapshot?) -> Unit = {}) {
         viewModelScope.launch {
-            val success = repository.restoreDataFromJson(jsonStr)
+            val snapshot = repository.createLocalBackupSnapshot(getApplication(), isSafetySnapshot = isSafety)
+            loadLocalSnapshots()
+            onResult(snapshot)
+        }
+    }
+
+    fun deleteLocalSnapshot(filePath: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val success = repository.deleteLocalBackupSnapshot(filePath)
+            loadLocalSnapshots()
             onResult(success)
         }
     }
 
-    fun resetProjectsOnly() {
-        viewModelScope.launch { repository.resetProjectsOnly() }
+    fun validateBackupJson(jsonStr: String): BackupValidationResult {
+        return repository.validateBackupJson(jsonStr)
     }
 
-    fun resetFinanceOnly() {
-        viewModelScope.launch { repository.resetFinanceOnly() }
+    fun backupDataToJson(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val json = repository.generateBackupJson(getApplication())
+            loadLocalSnapshots()
+            onResult(json)
+        }
     }
 
-    fun resetSettingsOnly() {
-        viewModelScope.launch { repository.resetSettingsOnly() }
+    fun restoreDataFromJson(
+        jsonStr: String,
+        createSafetyBackup: Boolean = true,
+        onResult: (RestoreExecutionResult) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.restoreDataFromJson(
+                jsonStr = jsonStr,
+                context = getApplication(),
+                createSafetyBackup = createSafetyBackup
+            )
+            loadLocalSnapshots()
+            onResult(result)
+        }
     }
 
-    fun resetBaseDataOnly() {
-        viewModelScope.launch { repository.resetBaseDataOnly() }
+    // =============================================================================================
+    // GRANULAR & FACTORY RESETS
+    // =============================================================================================
+
+    fun resetProjectsOnly(onResult: (ResetExecutionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.resetProjectsOnly()
+            _lastResetResult.value = res
+            selectedProjectId.value = null
+            onResult(res)
+        }
     }
 
-    fun resetData() {
-        viewModelScope.launch { repository.resetAllData() }
+    fun resetFinanceOnly(onResult: (ResetExecutionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.resetFinanceOnly()
+            _lastResetResult.value = res
+            onResult(res)
+        }
+    }
+
+    fun resetSettingsOnly(onResult: (ResetExecutionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.resetSettingsOnly()
+            _lastResetResult.value = res
+            onResult(res)
+        }
+    }
+
+    fun resetBaseDataOnly(onResult: (ResetExecutionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.resetBaseDataOnly()
+            _lastResetResult.value = res
+            onResult(res)
+        }
+    }
+
+    fun resetData(onResult: (ResetExecutionResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.resetAllData()
+            _lastResetResult.value = res
+            selectedProjectId.value = null
+            onResult(res)
+        }
     }
 }

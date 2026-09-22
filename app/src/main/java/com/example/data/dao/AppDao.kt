@@ -162,6 +162,9 @@ interface TimerSessionDao {
     @Query("SELECT * FROM timer_sessions ORDER BY id DESC")
     fun getAllSessions(): Flow<List<TimerSessionEntity>>
 
+    @Query("SELECT * FROM timer_sessions ORDER BY id ASC")
+    suspend fun getAllSessionsSync(): List<TimerSessionEntity>
+
     @Query("SELECT * FROM timer_sessions WHERE date = :dateStr ORDER BY id DESC")
     fun getSessionsForDate(dateStr: String): Flow<List<TimerSessionEntity>>
 
@@ -174,11 +177,17 @@ interface TimerSessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: TimerSessionEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSessions(sessions: List<TimerSessionEntity>)
+
     @Update
     suspend fun updateSession(session: TimerSessionEntity)
 
     @Delete
     suspend fun deleteSession(session: TimerSessionEntity)
+
+    @Query("DELETE FROM timer_sessions")
+    suspend fun deleteAllSessions()
 }
 
 @Dao

@@ -1,5 +1,8 @@
 package com.example.data.repository
 
+import android.content.Context
+import androidx.room.withTransaction
+import com.example.BuildConfig
 import com.example.data.database.AppDatabase
 import com.example.data.entity.AppConfigEntity
 import com.example.data.entity.DefaultClipEntity
@@ -9,8 +12,22 @@ import com.example.data.entity.ProjectEntity
 import com.example.data.entity.ProjectRevisionEntity
 import com.example.data.entity.StudioEntity
 import com.example.data.entity.TimerSessionEntity
+import com.example.data.model.BackupMetadata
+import com.example.data.model.BackupValidationResult
+import com.example.data.model.LocalBackupSnapshot
+import com.example.data.model.ResetExecutionResult
+import com.example.data.model.RestoreExecutionResult
 import com.example.util.PersianUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlin.math.min
 
 class CutterLogRepository(private val db: AppDatabase) {
@@ -399,53 +416,96 @@ class CutterLogRepository(private val db: AppDatabase) {
     }
     suspend fun saveConfig(config: AppConfigEntity) = db.appConfigDao().saveConfig(config)
 
-    // Backup and Restore
-    suspend fun backupDataToJson(): String {
-        val json = org.json.JSONObject()
-        json.put("backup_version", 2)
-        json.put("created_at", PersianUtils.getCurrentJalaliDate())
+    // =============================================================================================
+    // BACKUP, VALIDATION, SNAPSHOTS & ATOMIC RESTORE SYSTEM
+    // =============================================================================================
 
-        // Config
+    /**
+     * Generates a complete, structured JSON backup string containing full metadata and all entity tables.
+     */
+    suspend fun generateBackupJson(context: Context? = null): String = withContext(Dispatchers.IO) {
+        val root = JSONObject()
+        val nowMillis = System.currentTimeMillis()
+        val jalaliNow = PersianUtils.getCurrentJalaliDate()
+        val backupId = "BK-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(nowMillis))}"
+
         val cfg = getConfigSync()
-        val cfgObj = org.json.JSONObject().apply {
+        val studioList = db.studioDao().getAllStudiosSync()
+        val clipList = db.defaultClipDao().getAllDefaultClipsSync()
+        val projectList = db.projectDao().getAllProjectsSync()
+        val pClipList = db.projectClipDao().getAllProjectClipsSync()
+        val paymentList = db.paymentDao().getAllPaymentsSync()
+        val revList = db.projectRevisionDao().getAllRevisionsSync()
+        val sessionList = db.timerSessionDao().getAllSessionsSync()
+
+        val totalContract = projectList.sumOf { it.price }
+        val totalPaid = paymentList.sumOf { it.amount }
+
+        // 1. Metadata Block
+        val metaObj = JSONObject().apply {
+            put("appName", "CutterLog Pro")
+            put("appVersion", BuildConfig.VERSION_NAME)
+            put("schemaVersion", 4)
+            put("backupId", backupId)
+            put("timestampMillis", nowMillis)
+            put("jalaliDate", jalaliNow)
+            put("projectCount", projectList.size)
+            put("clipCount", pClipList.size)
+            put("paymentCount", paymentList.size)
+            put("revisionCount", revList.size)
+            put("sessionCount", sessionList.size)
+            put("studioCount", studioList.size)
+            put("defaultClipCount", clipList.size)
+            put("totalContractAmount", totalContract)
+            put("totalCollectedAmount", totalPaid)
+        }
+        root.put("metadata", metaObj)
+
+        // 2. App Config Block
+        val cfgObj = JSONObject().apply {
             put("dailyQuotaHours", cfg.dailyQuotaHours)
+            put("gracePeriodSeconds", cfg.gracePeriodSeconds)
+            put("defaultDeadlineDays", cfg.defaultDeadlineDays)
             put("soundAlertsEnabled", cfg.soundAlertsEnabled)
+            put("autoStart", cfg.autoStart)
+            put("autoBackupOnExit", cfg.autoBackupOnExit)
+            put("lastBackupDate", jalaliNow)
             put("invoiceBrandTitle", cfg.invoiceBrandTitle)
             put("invoiceBankCard", cfg.invoiceBankCard)
             put("invoiceBankOwner", cfg.invoiceBankOwner)
+            put("invoiceLogoPath", cfg.invoiceLogoPath)
+            put("invoiceSignaturePath", cfg.invoiceSignaturePath)
             put("invoiceFooterNote", cfg.invoiceFooterNote)
             put("quickPricesJson", cfg.quickPricesJson)
             put("packagesJson", cfg.packagesJson)
+            put("lastProjectCodeSequencesJson", cfg.lastProjectCodeSequencesJson)
         }
-        json.put("app_config", cfgObj)
+        root.put("app_config", cfgObj)
 
-        // Studios
-        val studiosArr = org.json.JSONArray()
-        val studioList = db.studioDao().getAllStudiosSync()
+        // 3. Studios
+        val studiosArr = JSONArray()
         studioList.forEach { st ->
-            studiosArr.put(org.json.JSONObject().apply {
+            studiosArr.put(JSONObject().apply {
                 put("id", st.id)
                 put("name", st.name)
             })
         }
-        json.put("studios", studiosArr)
+        root.put("studios", studiosArr)
 
-        // Default Clips
-        val clipsArr = org.json.JSONArray()
-        val clipList = db.defaultClipDao().getAllDefaultClipsSync()
+        // 4. Default Clips
+        val defaultClipsArr = JSONArray()
         clipList.forEach { cl ->
-            clipsArr.put(org.json.JSONObject().apply {
+            defaultClipsArr.put(JSONObject().apply {
                 put("id", cl.id)
                 put("name", cl.name)
             })
         }
-        json.put("default_clips", clipsArr)
+        root.put("default_clips", defaultClipsArr)
 
-        // Projects
-        val projectsArr = org.json.JSONArray()
-        val projectList = db.projectDao().getAllProjectsSync()
+        // 5. Projects
+        val projectsArr = JSONArray()
         projectList.forEach { pr ->
-            projectsArr.put(org.json.JSONObject().apply {
+            projectsArr.put(JSONObject().apply {
                 put("id", pr.id)
                 put("projectCode", pr.projectCode)
                 put("name", pr.name)
@@ -454,17 +514,17 @@ class CutterLogRepository(private val db: AppDatabase) {
                 put("status", pr.status)
                 put("isSettled", pr.isSettled)
                 put("createdAt", pr.createdAt)
-                put("deadlineDate", pr.deadlineDate)
+                put("deadlineDate", pr.deadlineDate ?: "")
                 put("weddingDate", pr.weddingDate ?: "")
+                put("deliveredAt", pr.deliveredAt ?: "")
             })
         }
-        json.put("projects", projectsArr)
+        root.put("projects", projectsArr)
 
-        // Project Clips
-        val pClipsArr = org.json.JSONArray()
-        val pClipList = db.projectClipDao().getAllProjectClipsSync()
+        // 6. Project Clips
+        val projectClipsArr = JSONArray()
         pClipList.forEach { pc ->
-            pClipsArr.put(org.json.JSONObject().apply {
+            projectClipsArr.put(JSONObject().apply {
                 put("id", pc.id)
                 put("projectId", pc.projectId)
                 put("clipName", pc.clipName)
@@ -473,13 +533,12 @@ class CutterLogRepository(private val db: AppDatabase) {
                 put("endDate", pc.endDate ?: "")
             })
         }
-        json.put("project_clips", pClipsArr)
+        root.put("project_clips", projectClipsArr)
 
-        // Payments
-        val paymentsArr = org.json.JSONArray()
-        val paymentList = db.paymentDao().getAllPaymentsSync()
+        // 7. Payments
+        val paymentsArr = JSONArray()
         paymentList.forEach { py ->
-            paymentsArr.put(org.json.JSONObject().apply {
+            paymentsArr.put(JSONObject().apply {
                 put("id", py.id)
                 put("projectId", py.projectId)
                 put("amount", py.amount)
@@ -487,13 +546,12 @@ class CutterLogRepository(private val db: AppDatabase) {
                 put("note", py.note ?: "")
             })
         }
-        json.put("payments", paymentsArr)
+        root.put("payments", paymentsArr)
 
-        // Revisions
-        val revsArr = org.json.JSONArray()
-        val revList = db.projectRevisionDao().getAllRevisionsSync()
+        // 8. Project Revisions
+        val revisionsArr = JSONArray()
         revList.forEach { rv ->
-            revsArr.put(org.json.JSONObject().apply {
+            revisionsArr.put(JSONObject().apply {
                 put("id", rv.id)
                 put("projectId", rv.projectId)
                 put("description", rv.description)
@@ -501,157 +559,529 @@ class CutterLogRepository(private val db: AppDatabase) {
                 put("phaseNum", rv.phaseNum)
             })
         }
-        json.put("project_revisions", revsArr)
+        root.put("project_revisions", revisionsArr)
 
-        return json.toString(2)
+        // 9. Timer Sessions
+        val sessionsArr = JSONArray()
+        sessionList.forEach { ss ->
+            sessionsArr.put(JSONObject().apply {
+                put("id", ss.id)
+                put("projectId", ss.projectId ?: JSONObject.NULL)
+                put("clipName", ss.clipName)
+                put("category", ss.category)
+                put("startTime", ss.startTime)
+                put("endTime", ss.endTime)
+                put("durationSeconds", ss.durationSeconds)
+                put("note", ss.note ?: "")
+                put("date", ss.date)
+            })
+        }
+        root.put("timer_sessions", sessionsArr)
+
+        // Update last backup date in config
+        saveConfig(cfg.copy(lastBackupDate = jalaliNow))
+
+        root.toString(2)
     }
 
-    suspend fun restoreDataFromJson(jsonStr: String): Boolean {
+    /**
+     * Inspects and validates a JSON string without modifying the database.
+     */
+    fun validateBackupJson(jsonStr: String): BackupValidationResult {
+        if (jsonStr.isBlank()) {
+            return BackupValidationResult(isValid = false, errorMessage = "محتوای فایل پشتیبان خالی است.")
+        }
         return try {
-            val json = org.json.JSONObject(jsonStr)
+            val root = JSONObject(jsonStr)
 
-            // Step 1: Save App Config
-            if (json.has("app_config")) {
-                val cfgObj = json.getJSONObject("app_config")
-                val cfg = AppConfigEntity(
-                    id = 1,
-                    dailyQuotaHours = cfgObj.optDouble("dailyQuotaHours", 8.0),
-                    soundAlertsEnabled = cfgObj.optBoolean("soundAlertsEnabled", true),
-                    invoiceBrandTitle = cfgObj.optString("invoiceBrandTitle", "آتلیه و استودیو تخصصی فیلم و عکس"),
-                    invoiceBankCard = cfgObj.optString("invoiceBankCard", "6037-9918-0000-0000"),
-                    invoiceBankOwner = cfgObj.optString("invoiceBankOwner", "تدوین‌گر کاترلاگ"),
-                    invoiceFooterNote = cfgObj.optString("invoiceFooterNote", "باتشکر از حسن اعتماد و همکاری شما با استودیو."),
-                    quickPricesJson = cfgObj.optString("quickPricesJson", "[{\"name\":\"بیعانه اول\",\"amount\":1000000},{\"name\":\"پیش‌پرداخت\",\"amount\":2000000},{\"name\":\"پکیج استاندارد\",\"amount\":5000000},{\"name\":\"تسویه کامل\",\"amount\":10000000}]"),
-                    packagesJson = cfgObj.optString("packagesJson", "[]")
+            // Check if it's a valid CutterLog backup (either modern metadata or legacy backup_version)
+            val hasMetadata = root.has("metadata")
+            val hasLegacyVersion = root.has("backup_version")
+            val hasProjects = root.has("projects")
+            val hasConfig = root.has("app_config")
+
+            if (!hasMetadata && !hasLegacyVersion && !hasProjects && !hasConfig) {
+                return BackupValidationResult(
+                    isValid = false,
+                    errorMessage = "فرمت فایل نامعتبر است؛ ساختار شناسه کاترلاگ در فایل یافت نشد."
                 )
-                saveConfig(cfg)
             }
 
-            // Step 2: Restore Studios
-            if (json.has("studios")) {
-                val arr = json.getJSONArray("studios")
-                for (i in 0 until arr.length()) {
-                    val stObj = arr.getJSONObject(i)
-                    val sName = stObj.optString("name")
-                    if (sName.isNotBlank()) addStudio(sName)
+            val meta: BackupMetadata = if (hasMetadata) {
+                val m = root.getJSONObject("metadata")
+                BackupMetadata(
+                    appName = m.optString("appName", "CutterLog Pro"),
+                    appVersion = m.optString("appVersion", "1.0.0"),
+                    schemaVersion = m.optInt("schemaVersion", 4),
+                    backupId = m.optString("backupId", "BK-UNKNOWN"),
+                    timestampMillis = m.optLong("timestampMillis", System.currentTimeMillis()),
+                    jalaliDate = m.optString("jalaliDate", PersianUtils.getCurrentJalaliDate()),
+                    projectCount = m.optInt("projectCount", root.optJSONArray("projects")?.length() ?: 0),
+                    clipCount = m.optInt("clipCount", root.optJSONArray("project_clips")?.length() ?: 0),
+                    paymentCount = m.optInt("paymentCount", root.optJSONArray("payments")?.length() ?: 0),
+                    revisionCount = m.optInt("revisionCount", root.optJSONArray("project_revisions")?.length() ?: 0),
+                    sessionCount = m.optInt("sessionCount", root.optJSONArray("timer_sessions")?.length() ?: 0),
+                    studioCount = m.optInt("studioCount", root.optJSONArray("studios")?.length() ?: 0),
+                    defaultClipCount = m.optInt("defaultClipCount", root.optJSONArray("default_clips")?.length() ?: 0),
+                    totalContractAmount = m.optDouble("totalContractAmount", 0.0),
+                    totalCollectedAmount = m.optDouble("totalCollectedAmount", 0.0)
+                )
+            } else {
+                // Legacy reconstruction
+                val projects = root.optJSONArray("projects")
+                val payments = root.optJSONArray("payments")
+                var totalP = 0.0
+                if (projects != null) {
+                    for (i in 0 until projects.length()) {
+                        totalP += projects.optJSONObject(i)?.optDouble("price", 0.0) ?: 0.0
+                    }
                 }
-            }
-
-            // Step 3: Restore Default Clips
-            if (json.has("default_clips")) {
-                val arr = json.getJSONArray("default_clips")
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val cName = obj.optString("name")
-                    if (cName.isNotBlank()) addDefaultClip(cName)
+                var totalPaid = 0.0
+                if (payments != null) {
+                    for (i in 0 until payments.length()) {
+                        totalPaid += payments.optJSONObject(i)?.optDouble("amount", 0.0) ?: 0.0
+                    }
                 }
+                BackupMetadata(
+                    appName = "CutterLog Pro (نسخه قدیمی)",
+                    appVersion = "1.0.0",
+                    schemaVersion = root.optInt("backup_version", 2),
+                    backupId = "BK-LEGACY",
+                    timestampMillis = System.currentTimeMillis(),
+                    jalaliDate = root.optString("created_at", PersianUtils.getCurrentJalaliDate()),
+                    projectCount = projects?.length() ?: 0,
+                    clipCount = root.optJSONArray("project_clips")?.length() ?: 0,
+                    paymentCount = payments?.length() ?: 0,
+                    revisionCount = root.optJSONArray("project_revisions")?.length() ?: 0,
+                    sessionCount = root.optJSONArray("timer_sessions")?.length() ?: 0,
+                    studioCount = root.optJSONArray("studios")?.length() ?: 0,
+                    defaultClipCount = root.optJSONArray("default_clips")?.length() ?: 0,
+                    totalContractAmount = totalP,
+                    totalCollectedAmount = totalPaid
+                )
             }
 
-            // Step 4: Restore Projects
-            if (json.has("projects")) {
-                val arr = json.getJSONArray("projects")
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val proj = ProjectEntity(
-                        id = obj.optInt("id", 0),
-                        projectCode = obj.optString("projectCode", ""),
-                        name = obj.optString("name", "پروژه"),
-                        studioName = obj.optString("studioName", "آتلیه"),
-                        price = obj.optDouble("price", 0.0),
-                        status = obj.optString("status", "EDITING"),
-                        isSettled = obj.optInt("isSettled", 0),
-                        createdAt = obj.optString("createdAt", PersianUtils.getCurrentJalaliDate()),
-                        deadlineDate = obj.optString("deadlineDate", PersianUtils.getCurrentJalaliDate()),
-                        weddingDate = obj.optString("weddingDate", "").ifBlank { null }
-                    )
-                    db.projectDao().insertProject(proj)
-                }
+            BackupValidationResult(isValid = true, metadata = meta)
+        } catch (e: Exception) {
+            BackupValidationResult(
+                isValid = false,
+                errorMessage = "خطا در خواندن فایل JSON: ${e.localizedMessage ?: "فرمت نامعتبر"}"
+            )
+        }
+    }
+
+    /**
+     * Creates an internal snapshot backup stored in app internal storage.
+     */
+    suspend fun createLocalBackupSnapshot(
+        context: Context,
+        isSafetySnapshot: Boolean = false
+    ): LocalBackupSnapshot? = withContext(Dispatchers.IO) {
+        try {
+            val backupsDir = File(context.filesDir, "backups")
+            if (!backupsDir.exists()) {
+                backupsDir.mkdirs()
             }
 
-            // Step 5: Restore Project Clips
-            if (json.has("project_clips")) {
-                val arr = json.getJSONArray("project_clips")
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val pc = ProjectClipEntity(
-                        id = obj.optInt("id", 0),
-                        projectId = obj.optInt("projectId", 0),
-                        clipName = obj.optString("clipName", "کلیپ"),
-                        isDone = obj.optInt("isDone", 0),
-                        estimateMins = obj.optInt("estimateMins", 60),
-                        endDate = obj.optString("endDate", "").ifBlank { null }
-                    )
-                    db.projectClipDao().insertClip(pc)
-                }
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val prefix = if (isSafetySnapshot) "safety_snapshot_pre_restore_" else "cutterlog_backup_"
+            val fileName = "$prefix$timestamp.json"
+            val file = File(backupsDir, fileName)
+
+            val jsonContent = generateBackupJson(context)
+            file.writeText(jsonContent, Charsets.UTF_8)
+
+            if (!file.exists() || file.length() == 0L) {
+                return@withContext null
             }
 
-            // Step 6: Restore Payments
-            if (json.has("payments")) {
-                val arr = json.getJSONArray("payments")
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val py = PaymentEntity(
-                        id = obj.optInt("id", 0),
-                        projectId = obj.optInt("projectId", 0),
-                        amount = obj.optDouble("amount", 0.0),
-                        date = obj.optString("date", PersianUtils.getCurrentJalaliDate()),
-                        note = obj.optString("note", "").ifBlank { null }
-                    )
-                    db.paymentDao().insertPayment(py)
-                }
+            val valResult = validateBackupJson(jsonContent)
+            val sizeKb = (file.length() / 1024.0)
+            val formattedSize = if (sizeKb >= 1024) String.format(Locale.US, "%.1f MB", sizeKb / 1024) else String.format(Locale.US, "%.1f KB", sizeKb)
+
+            LocalBackupSnapshot(
+                fileName = fileName,
+                filePath = file.absolutePath,
+                fileSizeBytes = file.length(),
+                formattedSize = formattedSize,
+                timestampMillis = file.lastModified(),
+                jalaliDate = PersianUtils.getCurrentJalaliDate(),
+                metadata = valResult.metadata,
+                isSafetySnapshot = isSafetySnapshot
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Retrieves all locally saved snapshot backups.
+     */
+    suspend fun getLocalBackupSnapshots(context: Context): List<LocalBackupSnapshot> = withContext(Dispatchers.IO) {
+        val backupsDir = File(context.filesDir, "backups")
+        if (!backupsDir.exists() || !backupsDir.isDirectory) {
+            return@withContext emptyList()
+        }
+
+        val files = backupsDir.listFiles { f -> f.isFile && f.name.endsWith(".json") } ?: return@withContext emptyList()
+        files.sortedByDescending { it.lastModified() }.mapNotNull { file ->
+            try {
+                val json = file.readText(Charsets.UTF_8)
+                val validation = validateBackupJson(json)
+                val sizeKb = (file.length() / 1024.0)
+                val formattedSize = if (sizeKb >= 1024) String.format(Locale.US, "%.1f MB", sizeKb / 1024) else String.format(Locale.US, "%.1f KB", sizeKb)
+                val isSafety = file.name.startsWith("safety_snapshot_")
+
+                LocalBackupSnapshot(
+                    fileName = file.name,
+                    filePath = file.absolutePath,
+                    fileSizeBytes = file.length(),
+                    formattedSize = formattedSize,
+                    timestampMillis = file.lastModified(),
+                    jalaliDate = validation.metadata?.jalaliDate ?: PersianUtils.getCurrentJalaliDate(),
+                    metadata = validation.metadata,
+                    isSafetySnapshot = isSafety
+                )
+            } catch (e: Exception) {
+                null
             }
+        }
+    }
 
-            // Step 7: Restore Revisions
-            if (json.has("project_revisions")) {
-                val arr = json.getJSONArray("project_revisions")
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val rv = ProjectRevisionEntity(
-                        id = obj.optInt("id", 0),
-                        projectId = obj.optInt("projectId", 0),
-                        description = obj.optString("description", ""),
-                        isApplied = obj.optInt("isApplied", 0),
-                        phaseNum = obj.optInt("phaseNum", 1)
-                    )
-                    db.projectRevisionDao().insertRevision(rv)
-                }
-            }
-
-            ensureProjectCodesMigrated()
-
-            true
+    /**
+     * Safely deletes a local snapshot.
+     */
+    suspend fun deleteLocalBackupSnapshot(filePath: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val file = File(filePath)
+            if (file.exists()) file.delete() else false
         } catch (e: Exception) {
             false
         }
     }
 
-    // Specific Reset Operations
-    suspend fun resetProjectsOnly() {
-        val projects = db.projectDao().getAllProjects()
-        // Delete all projects, clips, revisions, sessions
-        db.openHelper.writableDatabase.execSQL("DELETE FROM projects;")
-        db.openHelper.writableDatabase.execSQL("DELETE FROM project_clips;")
-        db.openHelper.writableDatabase.execSQL("DELETE FROM project_revisions;")
-        db.openHelper.writableDatabase.execSQL("DELETE FROM timer_sessions;")
+    /**
+     * Fully atomic, validated restore execution from JSON string.
+     * Takes safety snapshot before touching database, and executes in a single Room transaction.
+     */
+    suspend fun restoreDataFromJson(
+        jsonStr: String,
+        context: Context? = null,
+        createSafetyBackup: Boolean = true
+    ): RestoreExecutionResult = withContext(Dispatchers.IO) {
+        // Step 1: Pre-validation
+        val validation = validateBackupJson(jsonStr)
+        if (!validation.isValid || validation.metadata == null) {
+            return@withContext RestoreExecutionResult(
+                success = false,
+                message = validation.errorMessage ?: "فایل پشتیبان انتخاب‌شده نامعتبر است."
+            )
+        }
+
+        // Step 2: Safety snapshot creation
+        var safetySaved = false
+        if (createSafetyBackup && context != null) {
+            val snap = createLocalBackupSnapshot(context, isSafetySnapshot = true)
+            safetySaved = (snap != null)
+        }
+
+        // Step 3: Atomic Transactional Database Restore
+        try {
+            val root = JSONObject(jsonStr)
+
+            db.withTransaction {
+                // Clear existing tables in correct order respecting Foreign Keys
+                db.openHelper.writableDatabase.execSQL("DELETE FROM timer_sessions;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM payments;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM project_revisions;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM project_clips;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM projects;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM default_clips;")
+                db.openHelper.writableDatabase.execSQL("DELETE FROM studios;")
+
+                // 1. Restore App Config
+                if (root.has("app_config")) {
+                    val cfgObj = root.getJSONObject("app_config")
+                    val cfg = AppConfigEntity(
+                        id = 1,
+                        dailyQuotaHours = cfgObj.optDouble("dailyQuotaHours", 8.0),
+                        gracePeriodSeconds = cfgObj.optInt("gracePeriodSeconds", 15),
+                        defaultDeadlineDays = cfgObj.optInt("defaultDeadlineDays", 7),
+                        soundAlertsEnabled = cfgObj.optBoolean("soundAlertsEnabled", true),
+                        autoStart = cfgObj.optBoolean("autoStart", false),
+                        autoBackupOnExit = cfgObj.optBoolean("autoBackupOnExit", true),
+                        lastBackupDate = cfgObj.optString("lastBackupDate", PersianUtils.getCurrentJalaliDate()),
+                        invoiceBrandTitle = cfgObj.optString("invoiceBrandTitle", "استودیو فیلم و تدوین"),
+                        invoiceBankCard = cfgObj.optString("invoiceBankCard", "۶۰۳۷-۹۹۷۹-۰۰۰۰-۰۰۰۰"),
+                        invoiceBankOwner = cfgObj.optString("invoiceBankOwner", "تدوینگر گرامی"),
+                        invoiceLogoPath = cfgObj.optString("invoiceLogoPath", ""),
+                        invoiceSignaturePath = cfgObj.optString("invoiceSignaturePath", ""),
+                        invoiceFooterNote = cfgObj.optString("invoiceFooterNote", "با تشکر از همکاری شما."),
+                        quickPricesJson = cfgObj.optString("quickPricesJson", "[500000, 1000000, 2000000, 3000000, 5000000, 10000000]"),
+                        packagesJson = cfgObj.optString("packagesJson", "[]"),
+                        lastProjectCodeSequencesJson = cfgObj.optString("lastProjectCodeSequencesJson", "{}")
+                    )
+                    db.appConfigDao().saveConfig(cfg)
+                }
+
+                // 2. Restore Studios
+                if (root.has("studios")) {
+                    val arr = root.getJSONArray("studios")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val sName = obj.optString("name").trim()
+                        val sId = obj.optInt("id", 0)
+                        if (sName.isNotBlank()) {
+                            db.studioDao().insertStudio(StudioEntity(id = if (sId > 0) sId else 0, name = sName))
+                        }
+                    }
+                }
+
+                // 3. Restore Default Clips
+                if (root.has("default_clips")) {
+                    val arr = root.getJSONArray("default_clips")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val cName = obj.optString("name").trim()
+                        val cId = obj.optInt("id", 0)
+                        if (cName.isNotBlank()) {
+                            db.defaultClipDao().insertDefaultClip(DefaultClipEntity(id = if (cId > 0) cId else 0, name = cName))
+                        }
+                    }
+                }
+
+                // 4. Restore Projects
+                if (root.has("projects")) {
+                    val arr = root.getJSONArray("projects")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val proj = ProjectEntity(
+                            id = obj.optInt("id", 0),
+                            projectCode = obj.optString("projectCode", ""),
+                            name = obj.optString("name", "پروژه"),
+                            studioName = obj.optString("studioName", "آتلیه"),
+                            price = obj.optDouble("price", 0.0),
+                            status = obj.optString("status", ProjectEntity.STATUS_EDITING),
+                            isSettled = obj.optInt("isSettled", 0),
+                            createdAt = obj.optString("createdAt", PersianUtils.getCurrentJalaliDate()),
+                            deadlineDate = obj.optString("deadlineDate", "").ifBlank { null },
+                            weddingDate = obj.optString("weddingDate", "").ifBlank { null },
+                            deliveredAt = obj.optString("deliveredAt", "").ifBlank { null }
+                        )
+                        db.projectDao().insertProject(proj)
+                    }
+                }
+
+                // 5. Restore Project Clips
+                if (root.has("project_clips")) {
+                    val arr = root.getJSONArray("project_clips")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val pc = ProjectClipEntity(
+                            id = obj.optInt("id", 0),
+                            projectId = obj.optInt("projectId", 0),
+                            clipName = obj.optString("clipName", "کلیپ"),
+                            isDone = obj.optInt("isDone", 0),
+                            estimateMins = obj.optInt("estimateMins", 60),
+                            endDate = obj.optString("endDate", "").ifBlank { null }
+                        )
+                        db.projectClipDao().insertClip(pc)
+                    }
+                }
+
+                // 6. Restore Payments
+                if (root.has("payments")) {
+                    val arr = root.getJSONArray("payments")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val py = PaymentEntity(
+                            id = obj.optInt("id", 0),
+                            projectId = obj.optInt("projectId", 0),
+                            amount = obj.optDouble("amount", 0.0),
+                            date = obj.optString("date", PersianUtils.getCurrentJalaliDate()),
+                            note = obj.optString("note", "").ifBlank { null }
+                        )
+                        db.paymentDao().insertPayment(py)
+                    }
+                }
+
+                // 7. Restore Revisions
+                if (root.has("project_revisions")) {
+                    val arr = root.getJSONArray("project_revisions")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val rv = ProjectRevisionEntity(
+                            id = obj.optInt("id", 0),
+                            projectId = obj.optInt("projectId", 0),
+                            description = obj.optString("description", ""),
+                            isApplied = obj.optInt("isApplied", 0),
+                            phaseNum = obj.optInt("phaseNum", 1)
+                        )
+                        db.projectRevisionDao().insertRevision(rv)
+                    }
+                }
+
+                // 8. Restore Timer Sessions
+                if (root.has("timer_sessions")) {
+                    val arr = root.getJSONArray("timer_sessions")
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val pId = if (obj.isNull("projectId")) null else obj.optInt("projectId").takeIf { it > 0 }
+                        val ss = TimerSessionEntity(
+                            id = obj.optInt("id", 0),
+                            projectId = pId,
+                            clipName = obj.optString("clipName", "کار متفرقه"),
+                            category = obj.optString("category", "General"),
+                            startTime = obj.optString("startTime", "00:00:00"),
+                            endTime = obj.optString("endTime", "00:00:00"),
+                            durationSeconds = obj.optLong("durationSeconds", 0L),
+                            note = obj.optString("note", "").ifBlank { null },
+                            date = obj.optString("date", PersianUtils.getCurrentJalaliDate())
+                        )
+                        db.timerSessionDao().insertSession(ss)
+                    }
+                }
+            }
+
+            // Post-migration check
+            ensureProjectCodesMigrated()
+
+            RestoreExecutionResult(
+                success = true,
+                message = "اطلاعات با موفقیت و به صورت کامل بازیابی شد.",
+                metadata = validation.metadata,
+                restoredProjectsCount = validation.metadata.projectCount,
+                restoredPaymentsCount = validation.metadata.paymentCount,
+                restoredSessionsCount = validation.metadata.sessionCount,
+                safetyBackupSaved = safetySaved
+            )
+        } catch (e: Exception) {
+            RestoreExecutionResult(
+                success = false,
+                message = "خطای غیرمنتظره در حین بازیابی پایگاه داده: ${e.localizedMessage ?: "تراکنش لغو شد"}",
+                safetyBackupSaved = safetySaved
+            )
+        }
     }
 
-    suspend fun resetFinanceOnly() {
-        db.openHelper.writableDatabase.execSQL("DELETE FROM payments;")
-        // Reset project is_settled to 0 if price > 0
-        db.openHelper.writableDatabase.execSQL("UPDATE projects SET is_settled = 0 WHERE price > 0;")
+    // =============================================================================================
+    // GRANULAR & HARD RESET OPERATIONS (مرکز بازنشانی)
+    // =============================================================================================
+
+    /**
+     * 1. Reset Projects & Work History:
+     * Removes all projects, project clips, revisions, and timer sessions.
+     * Retains: Studios, default clips, financial accounts branding, and config.
+     */
+    suspend fun resetProjectsOnly(): ResetExecutionResult = withContext(Dispatchers.IO) {
+        val projCount = db.projectDao().getAllProjectsSync().size
+        db.withTransaction {
+            db.openHelper.writableDatabase.execSQL("DELETE FROM timer_sessions;")
+            db.openHelper.writableDatabase.execSQL("DELETE FROM payments;")
+            db.openHelper.writableDatabase.execSQL("DELETE FROM project_revisions;")
+            db.openHelper.writableDatabase.execSQL("DELETE FROM project_clips;")
+            db.openHelper.writableDatabase.execSQL("DELETE FROM projects;")
+        }
+        ResetExecutionResult(
+            success = true,
+            type = "PROJECTS",
+            title = "پاک‌سازی پروژه‌ها و کارکرد",
+            description = "تمام پروژه‌ها، کلیپ‌ها، اصلاحیه‌ها و سوابق زمانی حذف شدند.",
+            timestamp = PersianUtils.getCurrentJalaliDate(),
+            itemsAffectedCount = projCount
+        )
     }
 
-    suspend fun resetSettingsOnly() {
+    /**
+     * 2. Reset Financial History:
+     * Removes all payment records and resets is_settled = 0 on projects.
+     * Retains: Projects, clips, sessions, studios, config.
+     */
+    suspend fun resetFinanceOnly(): ResetExecutionResult = withContext(Dispatchers.IO) {
+        val payCount = db.paymentDao().getAllPaymentsSync().size
+        db.withTransaction {
+            db.openHelper.writableDatabase.execSQL("DELETE FROM payments;")
+            db.openHelper.writableDatabase.execSQL("UPDATE projects SET is_settled = 0 WHERE price > 0;")
+        }
+        ResetExecutionResult(
+            success = true,
+            type = "FINANCE",
+            title = "پاک‌سازی سوابق مالی و تراکنش‌ها",
+            description = "تمام پرداختی‌ها و فیش‌های ثبت‌شده تصفیه شدند و وضعیت پروژه‌ها به بدهکار تغییر یافت.",
+            timestamp = PersianUtils.getCurrentJalaliDate(),
+            itemsAffectedCount = payCount
+        )
+    }
+
+    /**
+     * 3. Reset Settings:
+     * Resets AppConfig to standard defaults.
+     * Retains: All projects, financial records, sessions, studios.
+     */
+    suspend fun resetSettingsOnly(): ResetExecutionResult = withContext(Dispatchers.IO) {
         saveConfig(AppConfigEntity())
+        ResetExecutionResult(
+            success = true,
+            type = "SETTINGS",
+            title = "بازنشانی تنظیمات به پیش‌فرض",
+            description = "تنظیمات برندینگ فاکتور، هدف روزانه، قیمت‌های سریع و پکیج‌ها به حالت کارخانه‌ای برگشتند.",
+            timestamp = PersianUtils.getCurrentJalaliDate(),
+            itemsAffectedCount = 1
+        )
     }
 
-    suspend fun resetBaseDataOnly() {
-        db.openHelper.writableDatabase.execSQL("DELETE FROM studios;")
-        db.openHelper.writableDatabase.execSQL("DELETE FROM default_clips;")
+    /**
+     * 4. Reset Base Data:
+     * Removes custom studios and default clips, re-seeding standard defaults.
+     * Retains: Active projects and finances.
+     */
+    suspend fun resetBaseDataOnly(): ResetExecutionResult = withContext(Dispatchers.IO) {
+        val stCount = db.studioDao().getAllStudiosSync().size
+        val clCount = db.defaultClipDao().getAllDefaultClipsSync().size
+        db.withTransaction {
+            db.openHelper.writableDatabase.execSQL("DELETE FROM default_clips;")
+            db.openHelper.writableDatabase.execSQL("DELETE FROM studios;")
+
+            // Seed clean defaults
+            listOf("استودیو نمونه", "آتلیه عروس").forEach {
+                db.studioDao().insertStudio(StudioEntity(name = it))
+            }
+            listOf("کلیپ اصلی", "کلیپ فرمالیته", "تیزر اینستاگرام", "سرمجلس").forEach {
+                db.defaultClipDao().insertDefaultClip(DefaultClipEntity(name = it))
+            }
+        }
+        ResetExecutionResult(
+            success = true,
+            type = "BASE",
+            title = "بازنشانی آتلیه‌ها و کلیپ‌های مرجع",
+            description = "فهرست استودیوها و کلیپ‌های پیش‌فرض به عناوین استاندارد اولیه برگشتند.",
+            timestamp = PersianUtils.getCurrentJalaliDate(),
+            itemsAffectedCount = stCount + clCount
+        )
     }
 
-    suspend fun resetAllData() {
-        db.clearAllTables()
-        saveConfig(AppConfigEntity())
+    /**
+     * 5. Factory Hard Reset (خام‌سازی کامل نرم‌افزار):
+     * Wipes all database tables, re-initializes clean default config and baseline entries.
+     */
+    suspend fun resetAllData(): ResetExecutionResult = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            db.clearAllTables()
+            saveConfig(AppConfigEntity())
+            listOf("استودیو نور", "آتلیه مایا", "استودیو رویال").forEach {
+                db.studioDao().insertStudio(StudioEntity(name = it))
+            }
+            listOf("کلیپ سینمایی اصلی", "کلیپ فرمالیته / شمال", "تیزر اینستاگرام", "سرمجلس و گیفت").forEach {
+                db.defaultClipDao().insertDefaultClip(DefaultClipEntity(name = it))
+            }
+        }
+        ResetExecutionResult(
+            success = true,
+            type = "ALL",
+            title = "خام‌سازی و بازنشانی کامل نرم‌افزار",
+            description = "تمام پایگاه داده، پروژه‌ها، حسابداری و تنظیمات پاک شدند و نرم‌افزار به حالت اولیه برگشت.",
+            timestamp = PersianUtils.getCurrentJalaliDate(),
+            itemsAffectedCount = 100
+        )
     }
 }
