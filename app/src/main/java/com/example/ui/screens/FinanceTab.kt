@@ -237,6 +237,12 @@ fun FinanceTab(viewModel: MainViewModel) {
     val totalCollected = periodFilteredPayments.sumOf { it.amount }
     val totalMarketDebt = (totalContractAmount - totalCollected).coerceAtLeast(0.0)
 
+    // Realized Revenue vs Pipeline (Delivered vs In-Progress)
+    val deliveredProjects = periodFilteredProjects.filter { it.isDelivered }
+    val deliveredRevenue = deliveredProjects.sumOf { it.price }
+    val inProgressProjects = periodFilteredProjects.filter { !it.isDelivered }
+    val inProgressValue = inProgressProjects.sumOf { it.price }
+
     // Overdue calculations (>20 days)
     val overdueProjects = periodFilteredProjects.filter { proj ->
         val projPayments = payments.filter { it.projectId == proj.id }
@@ -354,6 +360,10 @@ fun FinanceTab(viewModel: MainViewModel) {
             // 1. FINANCIAL SUMMARY SECTION (خلاصه مالی)
             FinancialGlobalSummarySection(
                 totalContractAmount = totalContractAmount,
+                deliveredRevenue = deliveredRevenue,
+                deliveredCount = deliveredProjects.size,
+                inProgressValue = inProgressValue,
+                inProgressCount = inProgressProjects.size,
                 totalCollected = totalCollected,
                 totalMarketDebt = totalMarketDebt,
                 debtorStudiosCount = debtorStudiosCount,
@@ -440,11 +450,10 @@ fun FinanceTab(viewModel: MainViewModel) {
                     val studioDebt = (studioPrice - studioPaid).coerceAtLeast(0.0)
 
                     val completedUnsettledCount = studioProjects.count { proj ->
-                        val clips = allClips.filter { it.projectId == proj.id }
-                        val is100Pct = (clips.isNotEmpty() && clips.all { it.isDone == 1 }) || proj.status == "COMPLETED"
+                        val isDelivered = proj.isDelivered
                         val projPaid = payments.filter { it.projectId == proj.id }.sumOf { it.amount }
                         val projDebt = (proj.price - projPaid).coerceAtLeast(0.0)
-                        is100Pct && (proj.isSettled == 0 || projDebt > 0)
+                        isDelivered && (proj.isSettled == 0 || projDebt > 0)
                     }
 
                     val oldestUnsettled = studioProjects
@@ -886,6 +895,10 @@ private fun FinanceTimePeriodDialog(
 @Composable
 private fun FinancialGlobalSummarySection(
     totalContractAmount: Double,
+    deliveredRevenue: Double,
+    deliveredCount: Int,
+    inProgressValue: Double,
+    inProgressCount: Int,
     totalCollected: Double,
     totalMarketDebt: Double,
     debtorStudiosCount: Int,
@@ -942,20 +955,35 @@ private fun FinancialGlobalSummarySection(
             }
         }
 
-        // Row 1: مجموع مبالغ & مجموع پرداخت‌شده
+        // Row 1: مجموع قراردادها & درآمد محقق‌شده (تحویل قطعی)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             SummaryMetricCard(
-                title = "مجموع مبالغ",
+                title = "کل ارزش پروژه‌ها",
                 value = PersianUtils.formatCurrencyFa(totalContractAmount),
-                subtitle = if (selectedPeriod == FinanceTimePeriod.ALL_TIME) "ارزش کل پروژه‌ها" else "پروژه‌های این بازه",
+                subtitle = "${PersianUtils.faNum(deliveredCount + inProgressCount)} پروژه کل",
                 icon = Icons.Default.Business,
                 accentColor = PrimaryPurple,
                 modifier = Modifier.weight(1f)
             )
 
+            SummaryMetricCard(
+                title = "درآمد تحویل قطعی",
+                value = PersianUtils.formatCurrencyFa(deliveredRevenue),
+                subtitle = "${PersianUtils.faNum(deliveredCount)} پروژه تحویل شده",
+                icon = Icons.Default.CheckCircle,
+                accentColor = MediaAccentCyan,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Row 2: دریافتی‌ها & مانده مطالبات
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             SummaryMetricCard(
                 title = "مجموع دریافتی",
                 value = PersianUtils.formatCurrencyFa(totalCollected),
@@ -964,28 +992,13 @@ private fun FinancialGlobalSummarySection(
                 accentColor = SuccessGreen,
                 modifier = Modifier.weight(1f)
             )
-        }
 
-        // Row 2: مجموع بدهی & تعداد استودیوهای دارای بدهی
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
             SummaryMetricCard(
                 title = "مانده بدهی",
                 value = PersianUtils.formatCurrencyFa(totalMarketDebt),
-                subtitle = "مانده مطالبات",
+                subtitle = "${PersianUtils.faNum(debtorStudiosCount)} استودیو بدهکار",
                 icon = Icons.Default.AttachMoney,
                 accentColor = if (totalMarketDebt > 0) WarningAmber else SuccessGreen,
-                modifier = Modifier.weight(1f)
-            )
-
-            SummaryMetricCard(
-                title = "استودیوهای بدهکار",
-                value = "${PersianUtils.faNum(debtorStudiosCount)} استودیو",
-                subtitle = "از مجموع ${PersianUtils.faNum(totalStudiosCount)} استودیو",
-                icon = Icons.Default.Warning,
-                accentColor = if (debtorStudiosCount > 0) WarningAmber else SuccessGreen,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1776,19 +1789,51 @@ private fun ProjectFinancialCard(
                         color = TextPrimary,
                         fontSize = 13.5.sp
                     )
-                    if (!project.weddingDate.isNullOrBlank()) {
-                        Text(
-                            text = "تاریخ مراسم: ${PersianUtils.faNum(project.weddingDate)}",
-                            color = TextMuted,
-                            fontSize = 10.5.sp
-                        )
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!project.projectCode.isNullOrBlank()) {
+                            Text(
+                                text = "کد: ${PersianUtils.faNum(project.projectCode)}",
+                                color = MediaAccentCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (!project.weddingDate.isNullOrBlank()) {
+                            Text(
+                                text = "مراسم: ${PersianUtils.faNum(project.weddingDate)}",
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                        if (!project.deliveredAt.isNullOrBlank()) {
+                            Text(
+                                text = "تحویل: ${PersianUtils.faNum(project.deliveredAt)}",
+                                color = SuccessGreen,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
-                StatusPill(
-                    text = if (isSettled) "تسویه شده" else "دارای بدهی",
-                    statusColor = if (isSettled) SuccessGreen else WarningAmber
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val isDelivered = project.status == "COMPLETED" || !project.deliveredAt.isNullOrBlank()
+                    val isReady = project.status == "READY_FOR_DELIVERY" && !isDelivered
+                    if (isDelivered) {
+                        StatusPill(text = "تحویل قطعی", statusColor = SuccessGreen)
+                    } else if (isReady) {
+                        StatusPill(text = "آماده تحویل", statusColor = MediaAccentCyan)
+                    }
+
+                    StatusPill(
+                        text = if (isSettled) "تسویه شده" else "دارای بدهی",
+                        statusColor = if (isSettled) SuccessGreen else WarningAmber
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

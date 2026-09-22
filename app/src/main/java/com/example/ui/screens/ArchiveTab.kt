@@ -189,9 +189,9 @@ fun ArchiveTab(viewModel: MainViewModel) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // 1. Base archive filter: strictly completed projects (completed clips & revisions finalized)
+    // 1. Base archive filter: strictly delivered and completed projects
     val baseArchivedProjects = projects.filter { proj ->
-        proj.status == "COMPLETED"
+        proj.status == "COMPLETED" || !proj.deliveredAt.isNullOrBlank()
     }
 
     // Dynamic real years from actual completed projects in DB

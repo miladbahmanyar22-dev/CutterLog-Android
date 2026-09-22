@@ -180,10 +180,14 @@ class CutterLogRepository(private val db: AppDatabase) {
         val allClipsDone = clips.isNotEmpty() && clips.all { it.isDone == 1 }
         val hasPendingRevisions = revisions.any { it.isApplied == 0 }
 
+        // If the project is already delivered, do not change its status unless revisions are actively added
         val newStatus = when {
-            hasPendingRevisions -> "REVISION"
-            allClipsDone -> "COMPLETED"
-            else -> "EDITING"
+            hasPendingRevisions -> ProjectEntity.STATUS_REVISION
+            project.deliveredAt != null || project.status == ProjectEntity.STATUS_COMPLETED || project.status == ProjectEntity.STATUS_DELIVERED -> {
+                ProjectEntity.STATUS_COMPLETED
+            }
+            allClipsDone -> ProjectEntity.STATUS_READY_FOR_DELIVERY
+            else -> ProjectEntity.STATUS_EDITING
         }
 
         if (project.status != newStatus) {
@@ -191,9 +195,61 @@ class CutterLogRepository(private val db: AppDatabase) {
         }
     }
 
+    /**
+     * Explicitly deliver project to client/studio.
+     * Sets status = COMPLETED and sets deliveredAt timestamp.
+     * Strictly Idempotent: If already delivered with identical status and timestamp, does nothing and avoids redundant operations.
+     */
+    suspend fun deliverProject(projectId: Int, deliveryDate: String? = null) {
+        val project = db.projectDao().getProjectById(projectId) ?: return
+        val actualDeliveryDate = deliveryDate?.ifBlank { null } ?: project.deliveredAt ?: PersianUtils.getCurrentJalaliDate()
+        
+        // Idempotency: Avoid re-writing or triggering duplicate cascades if already delivered
+        if (project.isDelivered && project.deliveredAt == actualDeliveryDate && project.status == ProjectEntity.STATUS_COMPLETED) {
+            return
+        }
+
+        db.projectDao().updateProject(
+            project.copy(
+                status = ProjectEntity.STATUS_COMPLETED,
+                deliveredAt = actualDeliveryDate
+            )
+        )
+    }
+
+    /**
+     * Revert delivery status (e.g. if user needs to re-edit or undo delivery)
+     */
+    suspend fun undeliverProject(projectId: Int) {
+        val project = db.projectDao().getProjectById(projectId) ?: return
+        val clips = db.projectClipDao().getClipsForProjectSync(projectId)
+        val revisions = db.projectRevisionDao().getRevisionsForProjectSync(projectId)
+
+        val allClipsDone = clips.isNotEmpty() && clips.all { it.isDone == 1 }
+        val hasPendingRevisions = revisions.any { it.isApplied == 0 }
+
+        val restoredStatus = when {
+            hasPendingRevisions -> ProjectEntity.STATUS_REVISION
+            allClipsDone -> ProjectEntity.STATUS_READY_FOR_DELIVERY
+            else -> ProjectEntity.STATUS_EDITING
+        }
+
+        db.projectDao().updateProject(
+            project.copy(
+                status = restoredStatus,
+                deliveredAt = null
+            )
+        )
+    }
+
     suspend fun reopenProjectFromArchive(projectId: Int) {
         val project = db.projectDao().getProjectById(projectId) ?: return
-        db.projectDao().updateProject(project.copy(status = "EDITING"))
+        db.projectDao().updateProject(
+            project.copy(
+                status = ProjectEntity.STATUS_EDITING,
+                deliveredAt = null
+            )
+        )
     }
 
     // Payments

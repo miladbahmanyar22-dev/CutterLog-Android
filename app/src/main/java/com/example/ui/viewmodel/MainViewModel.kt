@@ -191,6 +191,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deliverProject(projectId: Int, deliveryDate: String? = null) {
+        viewModelScope.launch {
+            repository.deliverProject(projectId, deliveryDate)
+        }
+    }
+
+    fun undeliverProject(projectId: Int) {
+        viewModelScope.launch {
+            repository.undeliverProject(projectId)
+        }
+    }
+
     fun reopenProjectFromArchive(projectId: Int) {
         viewModelScope.launch {
             repository.reopenProjectFromArchive(projectId)

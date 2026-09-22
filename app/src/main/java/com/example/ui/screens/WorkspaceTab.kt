@@ -152,6 +152,7 @@ fun WorkspaceTab(viewModel: MainViewModel) {
     var studioMenuExpanded by remember { mutableStateOf(false) }
     var projectToDelete by remember { mutableStateOf<ProjectEntity?>(null) }
     var selectedProjectForReport by remember { mutableStateOf<ProjectEntity?>(null) }
+    var projectToDeliverDirectly by remember { mutableStateOf<ProjectEntity?>(null) }
 
     val searchQuery by viewModel.workspaceSearch.collectAsState()
     val studioFilter by viewModel.workspaceStudioFilter.collectAsState()
@@ -183,9 +184,9 @@ fun WorkspaceTab(viewModel: MainViewModel) {
         val totalCount = clips.size
         val pct = if (totalCount > 0) doneCount.toFloat() / totalCount else 0f
         when (statusFilter) {
-            "EDITING" -> proj.status != "REVISION" && pct < 0.8f
+            "EDITING" -> proj.status != "REVISION" && proj.status != "READY_FOR_DELIVERY" && pct < 1.0f
             "REVISION" -> proj.status == "REVISION"
-            "NEAR_DONE" -> proj.status != "REVISION" && pct >= 0.8f
+            "NEAR_DONE" -> proj.status == "READY_FOR_DELIVERY" || (totalCount > 0 && doneCount == totalCount)
             else -> true
         }
     }
@@ -827,6 +828,7 @@ fun WorkspaceTab(viewModel: MainViewModel) {
                         paidAmount = pPaid,
                         isSelected = false,
                         onClick = { viewModel.selectProject(project.id) },
+                        onDeliverDirectly = { projectToDeliverDirectly = project },
                         onDelete = { projectToDelete = project }
                     )
                 }
@@ -856,7 +858,13 @@ fun WorkspaceTab(viewModel: MainViewModel) {
                 onToggleRevision = { rev -> viewModel.toggleRevisionApplied(rev) },
                 onDeleteRevision = { rev -> viewModel.deleteRevision(rev) },
                 onMarkRoundComplete = { phase -> viewModel.markRoundComplete(selectedProject.id, phase) },
-                onViewReport = { selectedProjectForReport = selectedProject }
+                onViewReport = { selectedProjectForReport = selectedProject },
+                onDeliverProject = { deliveryDate ->
+                    viewModel.deliverProject(selectedProject.id, deliveryDate)
+                },
+                onUndeliverProject = {
+                    viewModel.undeliverProject(selectedProject.id)
+                }
             )
         }
     }
@@ -978,6 +986,118 @@ fun WorkspaceTab(viewModel: MainViewModel) {
             sessions = projSessions,
             revisions = projRevisions,
             onDismiss = { selectedProjectForReport = null }
+        )
+    }
+
+    // DIRECT DELIVER CONFIRMATION DIALOG (از پیشخوان)
+    if (projectToDeliverDirectly != null) {
+        val proj = projectToDeliverDirectly!!
+        var directDeliveryDate by remember(proj.id) { mutableStateOf(PersianUtils.getCurrentJalaliDate()) }
+        var showDirectDatePicker by remember(proj.id) { mutableStateOf(false) }
+
+        if (showDirectDatePicker) {
+            PersianDatePickerDialog(
+                initialDate = directDeliveryDate,
+                onDismiss = { showDirectDatePicker = false },
+                onDateConfirm = { selectedDate ->
+                    if (!selectedDate.isNullOrBlank()) {
+                        directDeliveryDate = selectedDate
+                    }
+                    showDirectDatePicker = false
+                }
+            )
+        }
+
+        AlertDialog(
+            onDismissRequest = { projectToDeliverDirectly = null },
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "ثبت تحویل رسمی پروژه",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "آیا کلیپ‌های تدوین‌شده پروژه «${proj.name}» به آتلیه «${proj.studioName}» تحویل داده شد؟",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp
+                    )
+
+                    Surface(
+                        onClick = { showDirectDatePicker = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = DarkInputBg,
+                        border = BorderStroke(1.dp, BorderDark),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = PrimaryPurple,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "تاریخ تحویل به آتلیه:",
+                                    color = TextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Text(
+                                text = PersianUtils.faNum(directDeliveryDate),
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "با ثبت تحویل، این پروژه به عنوان تحویل قطعی در بایگانی و درآمد حسابداری منظور می‌شود.",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deliverProject(proj.id, directDeliveryDate)
+                        projectToDeliverDirectly = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("تایید و ثبت تحویل", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToDeliverDirectly = null }) {
+                    Text("انصراف", color = TextSecondary, fontSize = 12.sp)
+                }
+            }
         )
     }
 }
@@ -1109,18 +1229,29 @@ fun ProjectRowCard(
     paidAmount: Double,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onDeliverDirectly: () -> Unit = {},
     onDelete: () -> Unit
 ) {
     val remainingDebt = (project.price - paidAmount).coerceAtLeast(0.0)
     val isSettled = project.isSettled == 1 || remainingDebt <= 0.0
 
+    val isCompleted = project.status == "COMPLETED" || !project.deliveredAt.isNullOrBlank()
+    val isReadyForDelivery = (project.status == "READY_FOR_DELIVERY" || (totalClips > 0 && doneClips == totalClips)) && !isCompleted
+
     val (statusLabel, statusColor) = when {
+        isCompleted -> Pair("تحویل نهایی", SuccessGreen)
+        isReadyForDelivery -> Pair("آماده تحویل به کارفرما", SuccessGreen)
         project.status == "REVISION" -> Pair("اصلاحات درخواستی", WarningAmber)
-        project.status == "COMPLETED" -> Pair("تحویل نهایی", SuccessGreen)
         totalClips == 0 -> Pair("بدون کلیپ", TextMuted)
-        progressPct >= 0.8f -> Pair("در آستانه تحویل", SuccessGreen)
+        progressPct >= 0.8f -> Pair("در آستانه اتمام تدوین", MediaAccentCyan)
         progressPct >= 0.3f -> Pair("اصلاح رنگ و رافکات", MediaAccentCyan)
         else -> Pair("تدوین اولیه (شروع)", WarningAmber)
+    }
+
+    val cardBorder = if (isReadyForDelivery) {
+        BorderStroke(1.5.dp, SuccessGreen.copy(alpha = 0.75f))
+    } else {
+        BorderStroke(1.dp, BorderDark.copy(alpha = 0.9f))
     }
 
     Card(
@@ -1128,8 +1259,10 @@ fun ProjectRowCard(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        border = BorderStroke(1.dp, BorderDark.copy(alpha = 0.9f))
+        colors = CardDefaults.cardColors(
+            containerColor = if (isReadyForDelivery) DarkCard.copy(alpha = 0.92f) else DarkCard
+        ),
+        border = cardBorder
     ) {
         Column(
             modifier = Modifier
@@ -1154,14 +1287,22 @@ fun ProjectRowCard(
                         modifier = Modifier
                             .size(28.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(PrimaryPurple.copy(alpha = 0.12f))
-                            .border(0.8.dp, PrimaryPurple.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                            .background(
+                                if (isReadyForDelivery) SuccessGreen.copy(alpha = 0.15f)
+                                else PrimaryPurple.copy(alpha = 0.12f)
+                            )
+                            .border(
+                                0.8.dp,
+                                if (isReadyForDelivery) SuccessGreen.copy(alpha = 0.4f)
+                                else PrimaryPurple.copy(alpha = 0.3f),
+                                RoundedCornerShape(8.dp)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.FolderOpen,
+                            imageVector = if (isReadyForDelivery) Icons.Default.CheckCircle else Icons.Default.FolderOpen,
                             contentDescription = null,
-                            tint = PrimaryPurple,
+                            tint = if (isReadyForDelivery) SuccessGreen else PrimaryPurple,
                             modifier = Modifier.size(15.dp)
                         )
                     }
@@ -1195,7 +1336,38 @@ fun ProjectRowCard(
             }
 
             // ==========================================
-            // ۲. نام پروژه (عروس و داماد) - با فضای کامل و بدون شکستگی یا برش
+            // بنر اختصاصی وضعیت آماده تحویل
+            // ==========================================
+            if (isReadyForDelivery) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SuccessGreen.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = SuccessGreen,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تدوین کلیپ‌ها پایان یافت • آماده تحویل به کارفرما",
+                            color = SuccessGreen,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // ==========================================
+            // ۲. نام پروژه (عروس و داماد)
             // ==========================================
             Text(
                 text = project.name,
@@ -1207,7 +1379,7 @@ fun ProjectRowCard(
             )
 
             // ==========================================
-            // ۳. مشخصات آتلیه و تاریخ مراسم (منعطف و کامل)
+            // ۳. مشخصات آتلیه و تاریخ مراسم
             // ==========================================
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -1399,7 +1571,7 @@ fun ProjectRowCard(
             }
 
             // ==========================================
-            // ۴. نوار وضعیت پیشرفت تدوین کلیپ‌ها
+            // ۶. نوار وضعیت پیشرفت تدوین کلیپ‌ها
             // ==========================================
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -1448,53 +1620,132 @@ fun ProjectRowCard(
             }
 
             // ==========================================
-            // ۵. نوار عملیات پایین کارت (دکمه ورود و دکمه حذف)
+            // ۷. نوار عملیات پایین کارت
             // ==========================================
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onClick,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.4f)),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = PrimaryPurple.copy(alpha = 0.10f),
-                        contentColor = PrimaryPurple
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            if (isReadyForDelivery) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "ورود به پرونده و کلیپ‌ها",
-                        color = PrimaryPurple,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = null,
-                        tint = PrimaryPurple,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+                    // دکمه برجسته سبز رنگ «تحویل پروژه» در پیشخوان
+                    Button(
+                        onClick = onDeliverDirectly,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SuccessGreen,
+                            contentColor = Color.White
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تحویل پروژه",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(DarkSurface)
-                        .border(0.8.dp, BorderDark, RoundedCornerShape(8.dp))
+                    // دکمه ورود به پرونده
+                    OutlinedButton(
+                        onClick = onClick,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = PrimaryPurple.copy(alpha = 0.10f),
+                            contentColor = PrimaryPurple
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                    ) {
+                        Text(
+                            text = "ورود به پرونده",
+                            color = PrimaryPurple,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = null,
+                            tint = PrimaryPurple,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+
+                    // دکمه حذف
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(DarkSurface)
+                            .border(0.8.dp, BorderDark, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "حذف پروژه",
+                            tint = ErrorRed.copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "حذف پروژه",
-                        tint = ErrorRed.copy(alpha = 0.8f),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    OutlinedButton(
+                        onClick = onClick,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = PrimaryPurple.copy(alpha = 0.10f),
+                            contentColor = PrimaryPurple
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "ورود به پرونده و کلیپ‌ها",
+                            color = PrimaryPurple,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = null,
+                            tint = PrimaryPurple,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(DarkSurface)
+                            .border(0.8.dp, BorderDark, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "حذف پروژه",
+                            tint = ErrorRed.copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1519,7 +1770,9 @@ fun ProjectDetailView(
     onToggleRevision: (ProjectRevisionEntity) -> Unit,
     onDeleteRevision: (ProjectRevisionEntity) -> Unit = {},
     onMarkRoundComplete: (Int) -> Unit = {},
-    onViewReport: () -> Unit = {}
+    onViewReport: () -> Unit = {},
+    onDeliverProject: (String) -> Unit = {},
+    onUndeliverProject: () -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
@@ -1947,10 +2200,13 @@ fun ProjectDetailView(
         // گروه ۴: تحویل و پروژه
         ProjectDeliveryGroupCard(
             projectId = project.id,
-            isCompleted = project.status == "COMPLETED",
+            isCompleted = project.status == "COMPLETED" || !project.deliveredAt.isNullOrBlank(),
+            deliveredAt = project.deliveredAt,
             isReady = progressPct >= 1f && unappliedRevs == 0,
             remainingClips = remainingClips,
-            onViewReport = onViewReport
+            onViewReport = onViewReport,
+            onDeliverProject = onDeliverProject,
+            onUndeliverProject = onUndeliverProject
         )
 
         // ==========================================
@@ -2710,21 +2966,27 @@ private fun ProjectFinanceGroupCard(
 private fun ProjectDeliveryGroupCard(
     projectId: Int,
     isCompleted: Boolean,
+    deliveredAt: String?,
     isReady: Boolean,
     remainingClips: Int,
-    onViewReport: () -> Unit
+    onViewReport: () -> Unit,
+    onDeliverProject: (String) -> Unit = {},
+    onUndeliverProject: () -> Unit = {}
 ) {
+    var showDeliveryDialog by remember { mutableStateOf(false) }
+    var deliveryDateInput by remember { mutableStateOf(PersianUtils.getCurrentJalaliDate()) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = DarkCard),
-        border = BorderStroke(1.dp, BorderDark)
+        border = BorderStroke(1.dp, if (isCompleted) SuccessGreen.copy(alpha = 0.5f) else BorderDark)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Group Header (Icon + Title + Short Status + Action)
             Row(
@@ -2741,13 +3003,13 @@ private fun ProjectDeliveryGroupCard(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(PrimaryPurple.copy(alpha = 0.15f)),
+                            .background(if (isCompleted) SuccessGreen.copy(alpha = 0.15f) else PrimaryPurple.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Inventory2,
+                            imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Inventory2,
                             contentDescription = null,
-                            tint = PrimaryPurple,
+                            tint = if (isCompleted) SuccessGreen else PrimaryPurple,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -2761,9 +3023,10 @@ private fun ProjectDeliveryGroupCard(
                             fontSize = 14.5.sp
                         )
                         Text(
-                            text = "شناسه: #${PersianUtils.faNum(projectId)} • ${if (isCompleted) "تکمیل شده" else if (isReady) "آماده تحویل" else "در جریان تدوین"}",
-                            color = TextSecondary,
-                            fontSize = 11.5.sp
+                            text = "شناسه: #${PersianUtils.faNum(projectId)} • ${if (isCompleted) "تحویل شده" else if (isReady) "آماده تحویل" else "در جریان تدوین"}",
+                            color = if (isCompleted) SuccessGreen else TextSecondary,
+                            fontSize = 11.5.sp,
+                            fontWeight = if (isCompleted) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
@@ -2790,24 +3053,186 @@ private fun ProjectDeliveryGroupCard(
                 }
             }
 
-            // Description
+            // Description / Status Details
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 color = DarkInputBg
             ) {
-                Text(
-                    text = when {
-                        isCompleted -> "این پروژه به طور کامل تدوین، اصلاح و تحویل داده شده و در آرشیو نیز در دسترس است."
-                        isReady -> "تمامی کلیپ‌ها و اصلاحات انجام شده‌اند؛ پروژه آماده تحویل رسمی به کارفرما است."
-                        else -> "${PersianUtils.faNum(remainingClips)} کلیپ تا اتمام تدوین و آماده‌سازی نهایی برای تحویل باقی مانده است."
-                    },
-                    color = TextSecondary,
-                    fontSize = 11.5.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = when {
+                            isCompleted -> "این پروژه رسماً به آتلیه / کارفرما تحویل داده شده و پرونده در آرشیو پروژه‌های تکمیل‌شده در دسترس است."
+                            isReady -> "تمامی کلیپ‌ها و اصلاحات تدوین شده‌اند؛ پروژه آماده تحویل است. با کلیک بر روی دکمه زیر، تحویل رسمی پروژه را ثبت کنید."
+                            else -> "${PersianUtils.faNum(remainingClips)} کلیپ تا اتمام تدوین باقی مانده است. پس از اتمام تدوین و تایید نهایی، می‌توانید پروژه را تحویل دهید."
+                        },
+                        color = TextSecondary,
+                        fontSize = 11.5.sp,
+                        lineHeight = 18.sp
+                    )
+
+                    if (isCompleted && !deliveredAt.isNullOrBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Event,
+                                contentDescription = null,
+                                tint = SuccessGreen,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "تاریخ ثبت تحویل: ${PersianUtils.faNum(deliveredAt)}",
+                                color = SuccessGreen,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
+
+            // Delivery Action Buttons
+            if (isCompleted) {
+                OutlinedButton(
+                    onClick = { onUndeliverProject() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, TextMuted.copy(alpha = 0.5f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "لغو وضعیت تحویل (بازگشت به آماده تحویل)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                Button(
+                    onClick = {
+                        deliveryDateInput = PersianUtils.getCurrentJalaliDate()
+                        showDeliveryDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isReady) SuccessGreen else PrimaryPurple),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isReady) "ثبت تحویل رسمی پروژه به آتلیه" else "ثبت تحویل زودهنگام پروژه",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
+    // Delivery Confirmation Dialog
+    if (showDeliveryDialog) {
+        var showCustomDatePicker by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showDeliveryDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = SuccessGreen
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ثبت تحویل رسمی پروژه", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "با ثبت تحویل، پروژه وارد مرحله تحویل شده و در گزارشات نهایی و آرشیو رسمی قرار می‌گیرد.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DarkInputBg,
+                        border = BorderStroke(1.dp, BorderDark),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { showCustomDatePicker = true }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("تاریخ تحویل پروژه:", color = TextMuted, fontSize = 10.5.sp)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = PersianUtils.faNum(deliveryDateInput),
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Text("تغییر تاریخ", color = PrimaryPurple, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeliverProject(deliveryDateInput)
+                        showDeliveryDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("تأیید و ثبت تحویل", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeliveryDialog = false }) {
+                    Text("انصراف", color = TextMuted)
+                }
+            },
+            containerColor = DarkCard
+        )
+
+        if (showCustomDatePicker) {
+            PersianDatePickerDialog(
+                initialDate = deliveryDateInput,
+                onDismiss = { showCustomDatePicker = false },
+                onDateConfirm = { selected ->
+                    if (!selected.isNullOrBlank()) {
+                        deliveryDateInput = selected
+                    }
+                    showCustomDatePicker = false
+                }
+            )
         }
     }
 }
@@ -3400,7 +3825,7 @@ fun EditProjectDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    .padding(horizontal = 8.dp, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
@@ -3409,17 +3834,18 @@ fun EditProjectDialog(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
                                 Text(
                                     text = PersianUtils.formatStudioName(s),
                                     color = if (isSelected) Color.White else TextPrimary,
-                                    fontSize = 12.5.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    maxLines = 2,
+                                    lineHeight = 15.sp
                                 )
                             }
                         }

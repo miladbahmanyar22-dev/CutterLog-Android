@@ -162,19 +162,19 @@ fun CreateProjectDialog(
                 contentAlignment = Alignment.Center
             ) {
                 val dialogWidth = if (maxWidth > 600.dp) 540.dp else (maxWidth * 0.94f)
-                val dialogMaxHeight = maxHeight * 0.90f
+                val dialogHeight = maxHeight * 0.80f
 
                 Surface(
                     modifier = Modifier
                         .width(dialogWidth)
-                        .heightIn(max = dialogMaxHeight),
+                        .height(dialogHeight),
                     shape = RoundedCornerShape(20.dp),
                     color = DarkCard,
                     border = androidx.compose.foundation.BorderStroke(1.dp, BorderDark),
                     shadowElevation = 16.dp
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         // ==============================================================
                         // 1. FIXED HEADER
@@ -249,7 +249,7 @@ fun CreateProjectDialog(
                         // ==============================================================
                         Column(
                             modifier = Modifier
-                                .weight(1f, fill = false)
+                                .weight(1f)
                                 .fillMaxWidth()
                                 .verticalScroll(rememberScrollState())
                                 .padding(horizontal = 20.dp, vertical = 16.dp),
@@ -371,7 +371,7 @@ fun CreateProjectDialog(
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                                                    .padding(horizontal = 8.dp, vertical = 9.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.Center
                                             ) {
@@ -380,17 +380,18 @@ fun CreateProjectDialog(
                                                         imageVector = Icons.Default.Check,
                                                         contentDescription = null,
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(15.dp)
+                                                        modifier = Modifier.size(14.dp)
                                                     )
-                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
                                                 }
                                                 Text(
                                                     text = PersianUtils.formatStudioName(s),
                                                     color = if (isSelected) Color.White else TextPrimary,
-                                                    fontSize = 12.5.sp,
+                                                    fontSize = 11.5.sp,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                    maxLines = 2,
+                                                    lineHeight = 15.sp
                                                 )
                                             }
                                         }
@@ -696,7 +697,7 @@ fun CreateProjectDialog(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -708,19 +709,12 @@ fun CreateProjectDialog(
                                                     fontWeight = FontWeight.Medium
                                                 )
                                                 Spacer(modifier = Modifier.height(2.dp))
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(
-                                                        text = "${PersianUtils.faNum(deadlineDays)} روز کاری",
-                                                        color = PrimaryPurple,
-                                                        fontSize = 15.sp,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Text(
-                                                        text = " (از زمان ثبت)",
-                                                        color = TextMuted,
-                                                        fontSize = 11.sp
-                                                    )
-                                                }
+                                                Text(
+                                                    text = "${PersianUtils.faNum(deadlineDays)} روز کاری",
+                                                    color = PrimaryPurple,
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                             }
 
                                             // Stepper Controls
@@ -749,7 +743,7 @@ fun CreateProjectDialog(
                                                     color = DarkSurface,
                                                     border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.5f)),
                                                     modifier = Modifier
-                                                        .width(48.dp)
+                                                        .width(44.dp)
                                                         .height(36.dp)
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
@@ -787,7 +781,7 @@ fun CreateProjectDialog(
                                         PersianUtils.addDaysToJalali(baseDate, deadlineDays)
                                     }
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(10.dp),
                                         color = PrimaryPurple.copy(alpha = 0.08f),
                                         border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryPurple.copy(alpha = 0.25f)),
                                         modifier = Modifier.fillMaxWidth()
@@ -795,37 +789,40 @@ fun CreateProjectDialog(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.DateRange,
-                                                contentDescription = null,
-                                                tint = PrimaryPurple,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "موعد تحویل تخمینی: ",
-                                                color = PrimaryPurple,
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DateRange,
+                                                    contentDescription = null,
+                                                    tint = PrimaryPurple,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "موعد تحویل تخمینی:",
+                                                    color = PrimaryPurple,
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                             Text(
                                                 text = PersianUtils.faNum(estimatedDueDate),
                                                 color = TextPrimary,
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Medium
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
                                     }
 
-                                    // Quick Presets
+                                    // Quick Presets (2 per row)
                                     Column {
                                         Text(
-                                            text = "انتخاب سریع مهلت:",
-                                            color = TextMuted,
-                                            fontSize = 11.sp,
+                                            text = "انتخاب سریع مهلت تحویل:",
+                                            color = TextSecondary,
+                                            fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Medium
                                         )
                                         Spacer(modifier = Modifier.height(6.dp))
@@ -843,22 +840,32 @@ fun CreateProjectDialog(
                                         ) { (days, label), itemModifier ->
                                             val isSelected = deadlineDays == days
                                             Surface(
-                                                shape = RoundedCornerShape(8.dp),
+                                                shape = RoundedCornerShape(10.dp),
                                                 color = if (isSelected) PrimaryPurple.copy(alpha = 0.2f) else DarkSurface,
                                                 border = androidx.compose.foundation.BorderStroke(
                                                     1.dp,
                                                     if (isSelected) PrimaryPurple else BorderDark.copy(alpha = 0.6f)
                                                 ),
                                                 modifier = itemModifier
-                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clip(RoundedCornerShape(10.dp))
                                                     .clickable { deadlineDays = days }
                                             ) {
-                                                Box(
+                                                Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(horizontal = 8.dp, vertical = 7.dp),
-                                                    contentAlignment = Alignment.Center
+                                                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center
                                                 ) {
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = null,
+                                                            tint = PrimaryPurple,
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                    }
                                                     Text(
                                                         text = PersianUtils.faNum(label),
                                                         color = if (isSelected) PrimaryPurple else TextSecondary,

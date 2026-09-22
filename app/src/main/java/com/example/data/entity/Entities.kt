@@ -37,9 +37,24 @@ data class ProjectEntity(
     @ColumnInfo(name = "is_settled") val isSettled: Int = 0, // 1 = settled, 0 = active debt
     @ColumnInfo(name = "created_at") val createdAt: String, // YYYY/MM/DD
     @ColumnInfo(name = "deadline_date") val deadlineDate: String? = null,
-    @ColumnInfo(name = "status") val status: String = "EDITING", // EDITING, REVISION, COMPLETED
-    @ColumnInfo(name = "wedding_date") val weddingDate: String? = null
-)
+    @ColumnInfo(name = "status") val status: String = STATUS_EDITING, // EDITING, REVISION, READY_FOR_DELIVERY, COMPLETED
+    @ColumnInfo(name = "wedding_date") val weddingDate: String? = null,
+    @ColumnInfo(name = "delivered_at") val deliveredAt: String? = null // YYYY/MM/DD - Null means not yet delivered to studio
+) {
+    companion object {
+        const val STATUS_EDITING = "EDITING"
+        const val STATUS_REVISION = "REVISION"
+        const val STATUS_READY_FOR_DELIVERY = "READY_FOR_DELIVERY"
+        const val STATUS_COMPLETED = "COMPLETED" // Equivalent to Delivered
+        const val STATUS_DELIVERED = "DELIVERED"
+    }
+
+    val isDelivered: Boolean
+        get() = status == STATUS_COMPLETED || status == STATUS_DELIVERED || deliveredAt != null
+
+    val isReadyForDelivery: Boolean
+        get() = (status == STATUS_READY_FOR_DELIVERY || (!isDelivered && status != STATUS_REVISION))
+}
 
 @Entity(
     tableName = "project_clips",
